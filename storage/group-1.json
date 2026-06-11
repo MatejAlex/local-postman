@@ -1,0 +1,30 @@
+{
+  "id": "group-1",
+  "name": "User Management",
+  "requests": [
+    {
+      "id": "req-1",
+      "name": "List users",
+      "method": "GET",
+      "url": "{{base_url}}/users",
+      "params": [],
+      "headers": [
+        { "key": "Accept", "value": "application/json", "enabled": true }
+      ],
+      "body": "",
+      "bodyType": "none"
+    },
+    {
+      "id": "req-2",
+      "name": "Create post",
+      "method": "POST",
+      "url": "{{base_url}}/posts",
+      "params": [],
+      "headers": [
+        { "key": "Content-Type", "value": "application/json", "enabled": true }
+      ],
+      "body": "{\n  \"title\": \"Hello\",\n  \"body\": \"From local-postman\",\n  \"userId\": 1\n}",
+      "bodyType": "json"
+    }
+  ]
+}
