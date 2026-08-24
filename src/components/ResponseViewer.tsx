@@ -2,17 +2,27 @@
 
 import { useState } from 'react';
 import type { ApiResponse } from '../lib/types';
-import { formatSize, formatTime, prettyJson, statusColor } from '../lib/utils';
+import { formatSize, formatTime, prettyJson, prettyMarkup, statusColor } from '../lib/utils';
 
 interface Props {
   response: ApiResponse | null;
   isSending: boolean;
 }
 
-type Tab = 'pretty' | 'raw' | 'headers';
+type Tab = 'preview' | 'pretty' | 'raw' | 'headers';
 
 export default function ResponseViewer({ response, isSending }: Props) {
-  const [tab, setTab] = useState<Tab>('pretty');
+  // Tied to the response it was picked for, so every new response opens on its own default.
+  const [chosenTab, setChosenTab] = useState<{ of: ApiResponse | null; tab: Tab } | null>(null);
+
+  const body = response?.body ?? '';
+  const contentType = response?.contentType ?? '';
+  const isHtml = looksHtml(contentType, body);
+
+  // An HTML page is unreadable as source, so it opens on the rendered preview instead.
+  const defaultTab: Tab = isHtml ? 'preview' : 'pretty';
+  const tab = chosenTab?.of === response ? chosenTab.tab : defaultTab;
+  const setTab = (next: Tab) => setChosenTab({ of: response, tab: next });
 
   if (isSending) {
     return (
@@ -42,8 +52,8 @@ export default function ResponseViewer({ response, isSending }: Props) {
     );
   }
 
-  const isJson = response.contentType.includes('json') || looksJson(response.body);
   const headerEntries = Object.entries(response.headers);
+  const tabs: Tab[] = isHtml ? ['preview', 'pretty', 'raw', 'headers'] : ['pretty', 'raw', 'headers'];
 
   return (
     <div className="flex flex-col h-full">
@@ -64,7 +74,7 @@ export default function ResponseViewer({ response, isSending }: Props) {
 
       {/* Tabs */}
       <div className="flex gap-1 px-4 border-b border-[var(--border)]">
-        {(['pretty', 'raw', 'headers'] as Tab[]).map((t) => (
+        {tabs.map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -80,27 +90,67 @@ export default function ResponseViewer({ response, isSending }: Props) {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-auto p-4">
-        {tab === 'headers' ? (
-          <div className="flex flex-col gap-1 font-mono text-xs">
-            {headerEntries.map(([k, v]) => (
-              <div key={k} className="flex gap-2 py-1 border-b border-[var(--border)]">
-                <span className="text-[var(--accent)] shrink-0">{k}:</span>
-                <span className="text-[var(--fg)] break-all">{v}</span>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <pre className="text-sm font-mono whitespace-pre-wrap break-words text-[var(--fg)]">
-            {tab === 'pretty' && isJson ? prettyJson(response.body) : response.body || '(empty body)'}
-          </pre>
-        )}
-      </div>
+      {tab === 'preview' ? (
+        <iframe
+          // No allow-scripts and no allow-same-origin: the page renders, but cannot run.
+          sandbox=""
+          srcDoc={response.body}
+          title="Rendered response"
+          className="flex-1 w-full bg-white border-0"
+        />
+      ) : (
+        <div className="flex-1 overflow-auto p-4">
+          {tab === 'headers' ? (
+            <div className="flex flex-col gap-1 font-mono text-xs">
+              {headerEntries.map(([k, v]) => (
+                <div key={k} className="flex gap-2 py-1 border-b border-[var(--border)]">
+                  <span className="text-[var(--accent)] shrink-0">{k}:</span>
+                  <span className="text-[var(--fg)] break-all">{v}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <pre className="text-sm font-mono whitespace-pre-wrap break-words text-[var(--fg)]">
+              {tab === 'pretty' ? prettyBody(response) : response.body || '(empty body)'}
+            </pre>
+          )}
+        </div>
+      )}
     </div>
   );
+}
+
+/** Indent whatever the body turns out to be; anything unrecognised is shown as it arrived. */
+function prettyBody(response: ApiResponse): string {
+  const { body, contentType } = response;
+  if (body.trim() === '') {
+    return '(empty body)';
+  }
+  if (looksHtml(contentType, body) || looksXml(contentType, body)) {
+    return prettyMarkup(body);
+  }
+  if (contentType.includes('json') || looksJson(body)) {
+    return prettyJson(body);
+  }
+  return body;
 }
 
 function looksJson(body: string): boolean {
   const t = body.trim();
   return t.startsWith('{') || t.startsWith('[');
+}
+
+function looksHtml(contentType: string, body: string): boolean {
+  if (contentType.includes('html')) {
+    return true;
+  }
+  const head = body.trimStart().slice(0, 100).toLowerCase();
+  return head.startsWith('<!doctype html') || head.startsWith('<html');
+}
+
+function looksXml(contentType: string, body: string): boolean {
+  if (contentType.includes('xml')) {
+    return true;
+  }
+  return body.trimStart().startsWith('<?xml');
 }

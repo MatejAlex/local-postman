@@ -40,5 +40,5 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# runtime-generated storage (seed env/group files are committed)
+# pre-v1.4 runtime storage; real data now lives in ~/.local-postman
 /storage/history.json

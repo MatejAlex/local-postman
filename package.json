@@ -1,11 +1,11 @@
 {
   "name": "local-postman",
-  "version": "1.0.0",
+  "version": "1.4.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3010",
+    "dev": "NODE_OPTIONS=--use-system-ca next dev -p 3010",
     "build": "next build",
-    "start": "next start -p 3010",
+    "start": "NODE_OPTIONS=--use-system-ca next start -p 3010",
     "lint": "eslint"
   },
   "dependencies": {

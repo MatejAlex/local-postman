@@ -1,30 +1,57 @@
 'use client';
 
 import { useState } from 'react';
-import type { ApiRequest, BodyType, Method } from '../lib/types';
-import { METHODS } from '../lib/types';
+import type { ApiRequest, BodyType, CollectionAuth, Method, RequestAuthMode } from '../lib/types';
+import { METHODS, requestAuthOf } from '../lib/types';
 import { prettyJson } from '../lib/utils';
 import KeyValueEditor from './KeyValueEditor';
+import BasicAuthFields from './BasicAuthFields';
 
 interface Props {
   request: ApiRequest;
   onChange: (request: ApiRequest) => void;
   onSend: () => void;
   isSending: boolean;
+  collectionAuth: CollectionAuth | null;
+  vars: Record<string, string>;
 }
 
-type Tab = 'params' | 'headers' | 'body';
+type Tab = 'params' | 'auth' | 'headers' | 'body';
 
 const BODY_TYPES: BodyType[] = ['none', 'json', 'raw'];
 
-export default function RequestBuilder({ request, onChange, onSend, isSending }: Props) {
+const AUTH_MODES: { value: RequestAuthMode; label: string }[] = [
+  { value: 'inherit', label: 'Inherit' },
+  { value: 'basic', label: 'Basic' },
+  { value: 'none', label: 'No auth' },
+];
+
+const TAB_LABELS: Record<Tab, string> = {
+  params: 'Params',
+  auth: 'Auth',
+  headers: 'Headers',
+  body: 'Body',
+};
+
+export default function RequestBuilder({
+  request,
+  onChange,
+  onSend,
+  isSending,
+  collectionAuth,
+  vars,
+}: Props) {
   const [tab, setTab] = useState<Tab>('params');
 
   const patch = (p: Partial<ApiRequest>) => onChange({ ...request, ...p });
+  const auth = requestAuthOf(request);
 
   const count = (n: number) => (n > 0 ? <span className="ml-1.5 text-xs text-[var(--accent)]">{n}</span> : null);
   const activeParams = request.params.filter((p) => p.enabled && p.key.trim()).length;
   const activeHeaders = request.headers.filter((h) => h.enabled && h.key.trim()).length;
+
+  const inheritsBasic = auth.mode === 'inherit' && collectionAuth?.mode === 'basic';
+  const authActive = auth.mode === 'basic' || inheritsBasic;
 
   const canSend = request.url.trim().length > 0 && !isSending;
 
@@ -69,19 +96,20 @@ export default function RequestBuilder({ request, onChange, onSend, isSending }:
 
       {/* Tabs */}
       <div className="flex gap-1 px-4 border-b border-[var(--border)]">
-        {(['params', 'headers', 'body'] as Tab[]).map((t) => (
+        {(['params', 'auth', 'headers', 'body'] as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`px-3 py-2 text-sm capitalize border-b-2 -mb-px transition-colors ${
+            className={`px-3 py-2 text-sm border-b-2 -mb-px transition-colors ${
               tab === t
                 ? 'border-[var(--accent)] text-[var(--fg)]'
                 : 'border-transparent text-[var(--muted-fg)] hover:text-[var(--fg)]'
             }`}
           >
-            {t === 'params' ? 'Params' : t === 'headers' ? 'Headers' : 'Body'}
+            {TAB_LABELS[t]}
             {t === 'params' && count(activeParams)}
             {t === 'headers' && count(activeHeaders)}
+            {t === 'auth' && authActive && <span className="ml-1.5 text-[var(--accent)]">●</span>}
           </button>
         ))}
       </div>
@@ -90,6 +118,41 @@ export default function RequestBuilder({ request, onChange, onSend, isSending }:
       <div className="flex-1 overflow-auto p-4">
         {tab === 'params' && (
           <KeyValueEditor rows={request.params} onChange={(params) => patch({ params })} />
+        )}
+        {tab === 'auth' && (
+          <div className="flex flex-col gap-4 max-w-xl">
+            <div className="flex items-center gap-2">
+              {AUTH_MODES.map((m) => (
+                <button
+                  key={m.value}
+                  onClick={() => patch({ auth: { ...auth, mode: m.value } })}
+                  className={`px-3 py-1 text-xs rounded-md border transition-colors ${
+                    auth.mode === m.value
+                      ? 'border-[var(--accent)] text-[var(--accent)] bg-[var(--accent-soft)]'
+                      : 'border-[var(--border)] text-[var(--muted-fg)] hover:text-[var(--fg)]'
+                  }`}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+
+            {auth.mode === 'inherit' && <InheritNote collectionAuth={collectionAuth} />}
+
+            {auth.mode === 'basic' && (
+              <BasicAuthFields
+                value={auth.basic}
+                onChange={(basic) => patch({ auth: { ...auth, basic } })}
+                vars={vars}
+              />
+            )}
+
+            {auth.mode === 'none' && (
+              <p className="text-sm text-[var(--muted-fg)]">
+                No Authorization header is sent, even when the collection sets one.
+              </p>
+            )}
+          </div>
         )}
         {tab === 'headers' && (
           <KeyValueEditor
@@ -138,5 +201,30 @@ export default function RequestBuilder({ request, onChange, onSend, isSending }:
         )}
       </div>
     </div>
+  );
+}
+
+function InheritNote({ collectionAuth }: { collectionAuth: CollectionAuth | null }) {
+  if (!collectionAuth || collectionAuth.mode !== 'basic') {
+    return (
+      <p className="text-sm text-[var(--muted-fg)]">
+        This collection has no auth set, so this request sends none. Set it on the collection to
+        cover every request at once.
+      </p>
+    );
+  }
+
+  const who = collectionAuth.basic.username.trim();
+  return (
+    <p className="text-sm text-[var(--muted-fg)]">
+      Using the collection&rsquo;s Basic auth
+      {who ? (
+        <>
+          {' as '}
+          <code className="font-mono text-[var(--fg)]">{who}</code>
+        </>
+      ) : null}
+      {collectionAuth.basic.base64 ? '.' : ', sent unencoded.'}
+    </p>
   );
 }

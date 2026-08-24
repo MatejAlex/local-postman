@@ -1,16 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { promises as fs } from 'fs';
+import os from 'os';
 import path from 'path';
 
-// File-based storage rooted at <project>/storage. Each collection is a flat set
-// of JSON files; we never allow path traversal outside this directory.
-const STORAGE_DIR = path.join(process.cwd(), 'storage');
+// Runtime data lives outside the repo, because it holds whatever credentials were
+// sent; keeping it here would put them in every zip, backup and `git clean -xdf`.
+const STORAGE_DIR = process.env.LOCAL_POSTMAN_DIR || path.join(os.homedir(), '.local-postman');
+
+// The repo's storage/ is seed-only: copied into STORAGE_DIR on a first run.
+const SEED_DIR = path.join(process.cwd(), 'storage');
 
 const PREFIXES = ['group', 'env'] as const;
 const SINGLETONS = ['history'] as const;
 
 async function ensureDir() {
   await fs.mkdir(STORAGE_DIR, { recursive: true });
+  const existing = await fs.readdir(STORAGE_DIR);
+  if (existing.some((file) => file.endsWith('.json'))) {
+    return;
+  }
+  const seeds = await fs.readdir(SEED_DIR).catch(() => [] as string[]);
+  for (const file of seeds) {
+    if (file.endsWith('.json')) {
+      await fs.copyFile(path.join(SEED_DIR, file), path.join(STORAGE_DIR, file));
+    }
+  }
 }
 
 /** Validate a logical name and map it to a safe absolute file path. */

@@ -8,8 +8,8 @@ import type {
   HistoryItem,
   RequestGroup,
 } from '../src/lib/types';
-import { APP_VERSION, newGroup, newRequest } from '../src/lib/types';
-import { resolveRequest } from '../src/lib/utils';
+import { APP_VERSION, collectionAuthOf, newGroup, newRequest } from '../src/lib/types';
+import { requestVariables, resolveRequest, variableMap } from '../src/lib/utils';
 import {
   appendHistory,
   clearHistory,
@@ -22,9 +22,11 @@ import {
 } from '../src/lib/storage';
 import { useTheme } from '../src/lib/theme';
 import Sidebar from '../src/components/Sidebar';
+import type { CollectionSettings } from '../src/components/Sidebar';
 import RequestBuilder from '../src/components/RequestBuilder';
 import ResponseViewer from '../src/components/ResponseViewer';
 import HistoryPanel from '../src/components/HistoryPanel';
+import HistoryDetail from '../src/components/HistoryDetail';
 
 export default function Home() {
   const [environments, setEnvironments] = useState<Environment[]>([]);
@@ -35,6 +37,7 @@ export default function Home() {
   const [response, setResponse] = useState<ApiResponse | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [showHistory, setShowHistory] = useState(true);
+  const [inspectedItem, setInspectedItem] = useState<HistoryItem | null>(null);
   const [loaded, setLoaded] = useState(false);
 
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -50,6 +53,13 @@ export default function Home() {
   }, []);
 
   const activeEnv = environments.find((e) => e.id === activeEnvId) ?? null;
+  const envVars = variableMap(activeEnv);
+
+  const activeGroup = activeRequest
+    ? (groups.find((g) => g.requests.some((r) => r.id === activeRequest.id)) ?? null)
+    : null;
+  const activeCollectionAuth = activeGroup ? collectionAuthOf(activeGroup) : null;
+  const vars = requestVariables(activeGroup, activeEnv);
 
   // Persist a group, debounced per-group so rapid edits collapse into one write.
   const queueSaveGroup = (group: RequestGroup) => {
@@ -57,18 +67,24 @@ export default function Home() {
     saveTimers.current[group.id] = setTimeout(() => saveGroup(group), 400);
   };
 
+  /** Swap one group in place, and hand the new value back so the caller can persist it. */
+  const replaceGroup = (touched: RequestGroup) => {
+    setGroups(groups.map((g) => (g.id === touched.id ? touched : g)));
+  };
+
   // ---- Request editing ----
   const handleRequestChange = (updated: ApiRequest) => {
     setActiveRequest(updated);
-    let touched: RequestGroup | undefined;
-    setGroups((prev) =>
-      prev.map((g) => {
-        if (!g.requests.some((r) => r.id === updated.id)) return g;
-        touched = { ...g, requests: g.requests.map((r) => (r.id === updated.id ? updated : r)) };
-        return touched;
-      })
-    );
-    if (touched) queueSaveGroup(touched);
+    const owner = groups.find((g) => g.requests.some((r) => r.id === updated.id));
+    if (!owner) {
+      return;
+    }
+    const touched = {
+      ...owner,
+      requests: owner.requests.map((r) => (r.id === updated.id ? updated : r)),
+    };
+    replaceGroup(touched);
+    queueSaveGroup(touched);
   };
 
   // ---- Send ----
@@ -76,7 +92,7 @@ export default function Home() {
     if (!activeRequest) return;
     setIsSending(true);
     setResponse(null);
-    const resolved = resolveRequest(activeRequest, activeEnv);
+    const resolved = resolveRequest(activeRequest, activeGroup, activeEnv);
     const resp = await sendResolved(resolved);
     setResponse(resp);
     setIsSending(false);
@@ -84,6 +100,7 @@ export default function Home() {
     const item: HistoryItem = {
       id: `h-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       timestamp: Date.now(),
+      name: activeRequest.name,
       method: activeRequest.method,
       url: resolved.url,
       resolved,
@@ -94,6 +111,7 @@ export default function Home() {
   };
 
   const handleReplay = async (item: HistoryItem) => {
+    setInspectedItem(null);
     setIsSending(true);
     setResponse(null);
     const resp = await sendResolved(item.resolved);
@@ -117,15 +135,23 @@ export default function Home() {
   };
 
   const handleRenameGroup = (id: string, name: string) => {
-    let touched: RequestGroup | undefined;
-    setGroups((prev) =>
-      prev.map((g) => {
-        if (g.id !== id) return g;
-        touched = { ...g, name };
-        return touched;
-      })
-    );
-    if (touched) saveGroup(touched);
+    const target = groups.find((g) => g.id === id);
+    if (!target) {
+      return;
+    }
+    const touched = { ...target, name };
+    replaceGroup(touched);
+    saveGroup(touched);
+  };
+
+  const handleSaveCollection = (id: string, settings: CollectionSettings) => {
+    const target = groups.find((g) => g.id === id);
+    if (!target) {
+      return;
+    }
+    const touched = { ...target, auth: settings.auth, variables: settings.variables };
+    replaceGroup(touched);
+    saveGroup(touched);
   };
 
   const handleDeleteGroup = (id: string) => {
@@ -139,31 +165,29 @@ export default function Home() {
 
   // ---- Requests ----
   const handleAddRequest = (groupId: string) => {
+    const target = groups.find((g) => g.id === groupId);
+    if (!target) {
+      return;
+    }
     const req = newRequest();
-    let touched: RequestGroup | undefined;
-    setGroups((prev) =>
-      prev.map((g) => {
-        if (g.id !== groupId) return g;
-        touched = { ...g, requests: [...g.requests, req] };
-        return touched;
-      })
-    );
-    if (touched) saveGroup(touched);
+    const touched = { ...target, requests: [...target.requests, req] };
+    replaceGroup(touched);
+    saveGroup(touched);
     setActiveRequest(req);
     setResponse(null);
   };
 
   const handleDeleteRequest = (groupId: string, requestId: string) => {
-    let touched: RequestGroup | undefined;
-    setGroups((prev) =>
-      prev.map((g) => {
-        if (g.id !== groupId) return g;
-        touched = { ...g, requests: g.requests.filter((r) => r.id !== requestId) };
-        return touched;
-      })
-    );
-    if (touched) saveGroup(touched);
-    if (activeRequest?.id === requestId) setActiveRequest(null);
+    const target = groups.find((g) => g.id === groupId);
+    if (!target) {
+      return;
+    }
+    const touched = { ...target, requests: target.requests.filter((r) => r.id !== requestId) };
+    replaceGroup(touched);
+    saveGroup(touched);
+    if (activeRequest?.id === requestId) {
+      setActiveRequest(null);
+    }
   };
 
   // ---- Environments ----
@@ -202,12 +226,14 @@ export default function Home() {
           environments={environments}
           activeEnvId={activeEnvId}
           activeRequestId={activeRequest?.id ?? null}
+          envVars={envVars}
           onSelectActiveEnv={setActiveEnvId}
           onSaveEnv={handleSaveEnv}
           onDeleteEnv={handleDeleteEnv}
           onAddGroup={handleAddGroup}
           onRenameGroup={handleRenameGroup}
           onDeleteGroup={handleDeleteGroup}
+          onSaveCollection={handleSaveCollection}
           onAddRequest={handleAddRequest}
           onSelectRequest={(req) => {
             setActiveRequest(req);
@@ -225,6 +251,8 @@ export default function Home() {
                   onChange={handleRequestChange}
                   onSend={handleSend}
                   isSending={isSending}
+                  collectionAuth={activeCollectionAuth}
+                  vars={vars}
                 />
               </div>
               <div className="h-[45%] min-h-48 overflow-hidden">
@@ -237,9 +265,22 @@ export default function Home() {
         </main>
 
         {showHistory && (
-          <HistoryPanel history={history} onReplay={handleReplay} onClear={handleClearHistory} />
+          <HistoryPanel
+            history={history}
+            onInspect={setInspectedItem}
+            onReplay={handleReplay}
+            onClear={handleClearHistory}
+          />
         )}
       </div>
+
+      {inspectedItem && (
+        <HistoryDetail
+          item={inspectedItem}
+          onReplay={handleReplay}
+          onClose={() => setInspectedItem(null)}
+        />
+      )}
     </div>
   );
 }
