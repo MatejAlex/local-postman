@@ -1,6 +1,6 @@
 // Type definitions for local-postman
 
-export const APP_VERSION = 'v1.4';
+export const APP_VERSION = 'v1.5';
 
 export type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS';
 

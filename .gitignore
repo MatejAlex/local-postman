@@ -42,3 +42,5 @@ next-env.d.ts
 
 # pre-v1.4 runtime storage; real data now lives in ~/.local-postman
 /storage/history.json
+# only reachable if LOCAL_POSTMAN_DIR is pointed back at the seed dir, but it holds passwords
+/storage/secrets.json

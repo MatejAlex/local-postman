@@ -16,11 +16,17 @@ An HTML body also gets a **Preview** tab that renders it in a sandboxed iframe (
 History recorded before v1.2 has no name and shows "Unnamed request".
 8. **File-based storage** — environments, groups, and history are persisted as JSON via `/api/storage` (one file per env/group, plus `history.json`), in `~/.local-postman` rather than inside the repo.
 9. **Theming** — three modes (Dark Grey default → Dark → Light) cycled via the header icon, persisted to localStorage.
+10. **Shareable collections (v1.5)** — a `group-*.json` never contains a password, so it can be handed to a colleague as it sits.
+Basic-auth passwords live in `~/.local-postman/secrets.json` instead, keyed by collection id or `collectionId/requestId`.
+Nothing about using the app changes: the password box is typed into as before, and the storage route does the split on the way past.
 
 ## Architecture
 
 - `app/api/proxy/route.ts` — POST: server-side request forwarder (kills CORS, 30s timeout).
 - `app/api/storage/route.ts` — GET/PUT/DELETE: reads/writes `~/.local-postman/*.json` (path-traversal guarded), seeded from the repo's `storage/` on a first run.
+It is also the only place that knows about `secrets.json`: PUT of a collection lifts every `auth.basic.password` out into it and writes the file blanked, GET puts them back, and DELETE drops the collection's keys.
+A password still inline from before v1.5 is lifted on the first GET that sees it, so opening the app once cleans every collection and there is no migration to run.
+`resolveFile()` accepts only the `group-`/`env-` prefixes and the `history` singleton, which is what stops the browser fetching `secrets.json` by name.
 - `src/lib/` — `types.ts`, `utils.ts` (variable substitution + formatting), `storage.ts` (client API wrappers), `theme.tsx`.
 - `src/components/` — `Sidebar`, `EnvironmentManager`, `RequestBuilder`, `KeyValueEditor`, `ResponseViewer`, `HistoryPanel`, `HistoryDetail`, `ConfirmDialog`.
 `HistoryDetail` reuses `ResponseViewer` for the response pane, so a stored response formats exactly like a fresh one.
@@ -35,3 +41,8 @@ Node ships its own CA bundle and ignores the macOS keychain, so without this any
 It sits outside the repo on purpose: history records whatever headers were sent, credentials included, and a `.gitignore` entry protects git but not a zip, a backup, or `git clean -xdf`.
 The repo's `storage/` is seed-only. `env-1.json` and `group-1.json` are committed, point at `https://jsonplaceholder.typicode.com`, and are copied into the storage dir when it has no JSON in it yet, so a fresh checkout can send a working request immediately.
 - `APP_VERSION` is defined in `src/lib/types.ts` and shown in the header; keep it in sync with `package.json`.
+- **Sharing a collection** means copying its `group-*.json` out of `~/.local-postman` by hand; there is no export UI.
+Two things are not covered by the v1.5 split and still leak if you are careless:
+`history.json` stores the resolved `Authorization` header of the last 50 sends, which is base64 of `user:pass`, so it is never shareable.
+And a token pasted literally into a header value is written into the collection like any other string.
+Put such a token in an **environment** variable and reference `{{token}}`: environments live in their own files, so copying a collection does not carry them.
