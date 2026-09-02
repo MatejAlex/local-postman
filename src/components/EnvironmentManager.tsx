@@ -53,17 +53,33 @@ export default function EnvironmentManager({
         ))}
       </select>
 
-      {/* Quick list with edit affordance */}
+      {/* Quick list: clicking a row activates it, same as the picker above.
+          It used to be display-only, which read as a list of radio buttons that
+          did nothing: you clicked an environment, nothing moved, and every
+          {{variable}} kept resolving against whatever the dropdown still said. */}
       <div className="flex flex-col gap-0.5">
         {environments.map((env) => (
           <div
             key={env.id}
-            className="group flex items-center gap-2 px-2 py-1 rounded-md hover:bg-[var(--hover)]"
+            onClick={() => onSelectActive(env.id)}
+            className={`group flex items-center gap-2 px-2 py-1 rounded-md cursor-pointer ${
+              activeId === env.id ? 'bg-[var(--accent-soft)]' : 'hover:bg-[var(--hover)]'
+            }`}
+            title={activeId === env.id ? 'Active environment' : `Use ${env.name}`}
           >
             <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: env.color }} />
-            <span className="flex-1 text-sm truncate">{env.name}</span>
+            <span
+              className={`flex-1 text-sm truncate ${
+                activeId === env.id ? 'text-[var(--fg)] font-medium' : 'text-[var(--muted-fg)]'
+              }`}
+            >
+              {env.name}
+            </span>
             <button
-              onClick={() => setEditing(env)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditing(env);
+              }}
               className="opacity-0 group-hover:opacity-100 text-xs text-[var(--muted-fg)] hover:text-[var(--fg)]"
             >
               Edit
