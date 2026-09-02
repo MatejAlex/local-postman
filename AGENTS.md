@@ -3,26 +3,30 @@
 1. **Collections of requests** — requests are organized into named groups; groups and requests can be added, renamed (double-click), and deleted.
 Deleting a collection asks for confirmation first, naming it and how many requests go with it; deleting a single request does not.
 Each collection has a ⚙ panel holding its **variables** and its **auth**, and the ⚙ turns accent-coloured once either is set.
-2. **Environments** — named profiles (e.g. Development, Production) each with a color and a list of `{{variable}}` key/values. One environment is active globally; its color tints the header. Variables are substituted into the URL, query params, headers, and body at send time.
-3. **Collection variables** — the same `{{key}}` mechanism scoped to one collection, which is where a per-collection access token belongs (`Authorization: Bearer {{token}}`).
-**Clicking an environment in the sidebar list activates it**, and the active row is highlighted.
-Until v1.6 that list was display-only and only the dropdown selected: you clicked an environment, nothing moved, and every `{{variable}}` quietly kept resolving against the environment the dropdown still named. Substitution was never broken; the picker was.
-**The active environment wins on a name clash**, so a collection-wide default can be overridden per environment; this is the precedence Postman uses, and `requestVariables()` in `src/lib/utils.ts` is the single place it is decided.
-The settings panel flags any collection variable the environment is currently shadowing.
-4. **Request builder** — method, URL with `{{variable}}` support, and tabs for query Params, Headers, and Body (None / JSON / Raw, with Beautify for JSON).
-5. **Server proxy** — requests are forwarded through `/api/proxy` (server-side fetch) so arbitrary APIs work without browser CORS errors. Network and timeout failures return a structured error instead of crashing.
-6. **Rich response viewer** — status, time, size, and tabs for Pretty / Raw / Headers, plus copy-to-clipboard.
+2. **Collection variables** — `{{key}}` values scoped to one collection, set in its ⚙ panel and substituted into the URL, query params, headers and body at send time. A collection is the only place a variable can come from.
+**There were environments until v1.7**, a second global set layered on top of these. They are gone: they did the same job twice, and having two sources for one `{{key}}` mostly produced confusion about which won. Anything an environment held belongs in the collection that uses it.
+Two things about that older design are worth knowing, because both looked like broken substitution and neither was:
+the sidebar list of environments was display-only until v1.6, so clicking one changed nothing;
+and a `{{key}}` that is defined nowhere is left on the wire verbatim rather than blanked, which is deliberate but reads as a failure if you expected a value.
+`requestVariables()` in `src/lib/utils.ts` is the single place a request's variables are assembled, and since v1.7 it has exactly one source to assemble them from.
+3. **Collection colours (v1.7)** — each collection carries a colour, set in its ⚙ panel, shown as a dot beside its name and used to tint the header while one of its requests is open. Green for development, red for production; the meaning is yours, the palette is fixed.
+4. **Reordering (v1.7)** — drag a collection by the ⠿ handle on its header row, or drag a request within its collection. A request cannot be dragged into a different collection.
+Collections need an explicit `order` field because they are one file each and arrive in `readdir` order, which is neither insertion order nor stable between machines; a move rewrites every collection, since `order` is a position and moving one row shifts the rest.
+Requests need no such field - they are an array inside one file, so their order is already the order they are stored in.
+5. **Request builder** — method, URL with `{{variable}}` support, and tabs for query Params, Headers, and Body (None / JSON / Raw, with Beautify for JSON).
+6. **Server proxy** — requests are forwarded through `/api/proxy` (server-side fetch) so arbitrary APIs work without browser CORS errors. Network and timeout failures return a structured error instead of crashing.
+7. **Rich response viewer** — status, time, size, and tabs for Pretty / Raw / Headers, plus copy-to-clipboard.
 Pretty indents JSON, HTML and XML.
 An HTML body also gets a **Preview** tab that renders it in a sandboxed iframe (no `allow-scripts`, no `allow-same-origin`), which is what makes an ORDS/APEX error page readable; it opens on that tab by default.
-7. **Request history** — the last 50 sends are recorded in the History panel, each row showing the request's name, its status and two buttons: 🔍 opens the sent request and its response in a modal, ↻ sends it again.
+8. **Request history** — the last 50 sends are recorded in the History panel, each row showing the request's name, its status and two buttons: 🔍 opens the sent request and its response in a modal, ↻ sends it again.
 History recorded before v1.2 has no name and shows "Unnamed request".
-8. **File-based storage** — environments, groups, and history are persisted as JSON via `/api/storage` (one file per env/group, plus `history.json`), in `~/.local-postman` rather than inside the repo.
-9. **Theming** — three modes (Dark Grey default → Dark → Light) cycled via the header icon, persisted to localStorage.
-10. **Shareable collections (v1.5)** — a `group-*.json` never contains a password, so it can be handed to a colleague as it sits.
+9. **File-based storage** — collections and history are persisted as JSON via `/api/storage` (one `group-*.json` per collection, plus `history.json`), in `~/.local-postman` rather than inside the repo. `env-*.json` files are no longer read; v1.7 leaves any it finds untouched.
+10. **Theming** — three modes (Dark Grey default → Dark → Light) cycled via the header icon, persisted to localStorage.
+11. **Shareable collections (v1.5)** — a `group-*.json` never contains a password, so it can be handed to a colleague as it sits.
 Basic-auth passwords live in `~/.local-postman/secrets.json` instead, keyed by collection id or `collectionId/requestId`.
 Nothing about using the app changes: the password box is typed into as before, and the storage route does the split on the way past.
 
-11. **MCP requests (v1.6)** — a request has a **kind**, `http` or `mcp`, and an MCP one talks to an MCP server over Streamable HTTP.
+12. **MCP requests (v1.6)** — a request has a **kind**, `http` or `mcp`, and an MCP one talks to an MCP server over Streamable HTTP.
 It keeps the URL, the headers, the auth panel and `{{variable}}` substitution; it swaps Params and Body for a single **MCP** tab holding the method, the target and a JSON arguments box.
 Seven methods: `tools/list`, `tools/call`, `prompts/list`, `prompts/get`, `resources/list`, `resources/read`, `ping`.
 Add one from the collection header's **M** button.
@@ -34,14 +38,15 @@ Deliberately absent, and the reason this is not a fork of the reference inspecto
 - `app/api/mcp/route.ts` — POST: the MCP client. One MCP call is three HTTP requests behind a session handshake, which is why it cannot be `/api/proxy` with a different body. It understands both response framings (plain JSON and SSE), unwraps the SSE one, and reports `application/json` either way so the viewer opens on Pretty. A JSON-RPC error becomes the response's `error` while the payload still fills the body; a tool that returns `isError` is a successful call and is left alone.
 - `src/lib/mcp.ts` — the method catalogue, which methods need a target or take arguments, and `mcpParamsFor()`, which turns a config into JSON-RPC params **or** an error. Bad JSON is caught here so the message names the box the user is looking at, and such a request never reaches the network or the history.
 - `app/api/proxy/route.ts` — POST: server-side request forwarder (kills CORS, 30s timeout).
-- `app/api/storage/route.ts` — GET/PUT/DELETE: reads/writes `~/.local-postman/*.json` (path-traversal guarded), seeded from the repo's `storage/` on a first run.
+- `app/api/storage/route.ts` — GET/PUT/DELETE: reads/writes `~/.local-postman/*.json` (path-traversal guarded), seeded from the repo's `storage/` on a first run. Only the `group-` prefix and the `history` singleton are accepted; `env-` was dropped with environments in v1.7.
 It is also the only place that knows about `secrets.json`: PUT of a collection lifts every `auth.basic.password` out into it and writes the file blanked, GET puts them back, and DELETE drops the collection's keys.
 A password still inline from before v1.5 is lifted on the first GET that sees it, so opening the app once cleans every collection and there is no migration to run.
-`resolveFile()` accepts only the `group-`/`env-` prefixes and the `history` singleton, which is what stops the browser fetching `secrets.json` by name.
-- `src/lib/` — `types.ts`, `utils.ts` (variable substitution + formatting), `storage.ts` (client API wrappers), `theme.tsx`.
-- `src/components/` — `Sidebar`, `EnvironmentManager`, `RequestBuilder`, `KeyValueEditor`, `ResponseViewer`, `HistoryPanel`, `HistoryDetail`, `ConfirmDialog`.
+`resolveFile()` accepts only the `group-` prefix and the `history` singleton, which is what stops the browser fetching `secrets.json` by name.
+- `src/lib/` — `types.ts`, `utils.ts` (variable substitution + formatting), `storage.ts` (client API wrappers), `theme.tsx`, `useDragList.ts`.
+`useDragList` carries the dragged index in `dataTransfer` rather than React state, because setting state on `dragstart` and reading it on `drop` loses a race and silently drops the move; and it types the payload per list, so a request dragged inside a collection does not also register on the collection list it bubbles through.
+- `src/components/` — `Sidebar`, `RequestBuilder`, `KeyValueEditor`, `ResponseViewer`, `HistoryPanel`, `HistoryDetail`, `ConfirmDialog`.
 `HistoryDetail` reuses `ResponseViewer` for the response pane, so a stored response formats exactly like a fresh one.
-`resolveRequest(req, group, env)` takes the collection rather than a pre-computed auth, so the variables and the auth it applies always come from the same place.
+`resolveRequest(req, group)` takes the collection rather than a pre-computed auth, so the variables and the auth it applies always come from the same place.
 
 ## Development Notes
 
@@ -60,7 +65,6 @@ It sits outside the repo on purpose: history records whatever headers were sent,
 The repo's `storage/` is seed-only. `env-1.json` and `group-1.json` are committed, point at `https://jsonplaceholder.typicode.com`, and are copied into the storage dir when it has no JSON in it yet, so a fresh checkout can send a working request immediately.
 - `APP_VERSION` is defined in `src/lib/types.ts` and shown in the header; keep it in sync with `package.json`.
 - **Sharing a collection** means copying its `group-*.json` out of `~/.local-postman` by hand; there is no export UI.
-Two things are not covered by the v1.5 split and still leak if you are careless:
-`history.json` stores the resolved `Authorization` header of the last 50 sends, which is base64 of `user:pass`, so it is never shareable.
-And a token pasted literally into a header value is written into the collection like any other string.
-Put such a token in an **environment** variable and reference `{{token}}`: environments live in their own files, so copying a collection does not carry them.
+The v1.5 split keeps Basic-auth **passwords** out of that file, and nothing else.
+**A bearer token is not covered.** Whether it is pasted into a header or held as a collection variable, it is written into `group-*.json` like any other string, and since v1.7 removed environments there is no longer a place to put one that does not travel with the collection. Blank it before handing the file over.
+`history.json` stores the resolved `Authorization` header of the last 50 sends, so it is never shareable regardless.

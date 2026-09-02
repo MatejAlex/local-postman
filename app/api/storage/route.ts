@@ -10,7 +10,9 @@ const STORAGE_DIR = process.env.LOCAL_POSTMAN_DIR || path.join(os.homedir(), '.l
 // The repo's storage/ is seed-only: copied into STORAGE_DIR on a first run.
 const SEED_DIR = path.join(process.cwd(), 'storage');
 
-const PREFIXES = ['group', 'env'] as const;
+// 'env' was dropped in v1.7 along with environments; an env-*.json left in the
+// storage dir is simply never read again.
+const PREFIXES = ['group'] as const;
 const SINGLETONS = ['history'] as const;
 
 // Passwords are held here instead of in the collection, so a group-*.json can be handed to
@@ -181,8 +183,8 @@ function isGroup(name: string): boolean {
 /* Routes                                                                      */
 /* -------------------------------------------------------------------------- */
 
-// GET /api/storage            -> { environments, groups, history }
-// GET /api/storage?name=env-1 -> single document
+// GET /api/storage               -> { groups, history }
+// GET /api/storage?name=group-1  -> single document
 export async function GET(req: NextRequest) {
   await ensureDir();
   const name = req.nextUrl.searchParams.get('name');
@@ -207,7 +209,6 @@ export async function GET(req: NextRequest) {
 
   const files = await fs.readdir(STORAGE_DIR).catch(() => [] as string[]);
   const secrets = await readSecrets();
-  const environments: unknown[] = [];
   const groups: unknown[] = [];
   let history: unknown[] = [];
   let lifted = false;
@@ -219,9 +220,7 @@ export async function GET(req: NextRequest) {
         try {
           const file = path.join(STORAGE_DIR, f);
           const data: unknown = JSON.parse(await fs.readFile(file, 'utf8'));
-          if (f.startsWith('env-')) {
-            environments.push(data);
-          } else if (f.startsWith('group-')) {
+          if (f.startsWith('group-')) {
             if (await hydrateGroup(file, data, f.slice(0, -'.json'.length), secrets)) {
               lifted = true;
             }
@@ -237,7 +236,7 @@ export async function GET(req: NextRequest) {
 
   if (lifted) await writeSecrets(secrets);
 
-  return NextResponse.json({ environments, groups, history });
+  return NextResponse.json({ groups, history });
 }
 
 // PUT /api/storage  body: { name, data }

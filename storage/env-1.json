@@ -1,9 +1,0 @@
-{
-  "id": "env-1",
-  "name": "Development",
-  "color": "#4ADE80",
-  "variables": [
-    { "key": "base_url", "value": "https://jsonplaceholder.typicode.com", "enabled": true },
-    { "key": "api_key", "value": "dev-key-123", "enabled": true }
-  ]
-}

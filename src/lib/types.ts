@@ -3,7 +3,7 @@
 import type { McpConfig, McpMethod } from './mcp';
 import { emptyMcpConfig } from './mcp';
 
-export const APP_VERSION = 'v1.6';
+export const APP_VERSION = 'v1.7';
 
 export type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS';
 
@@ -25,12 +25,20 @@ export interface KeyValue {
   enabled: boolean;
 }
 
-export interface Environment {
-  id: string;
-  name: string;
-  color: string; // hex
-  variables: KeyValue[];
-}
+/**
+ * The colours a collection can be tagged with, so a glance says which estate a
+ * request belongs to. Green for development, red for production, and so on -
+ * the meaning is the user's, only the palette is ours.
+ */
+export const COLLECTION_COLORS = [
+  '#22c55e', // green
+  '#3b82f6', // blue
+  '#f59e0b', // amber
+  '#ef4444', // red
+  '#a855f7', // purple
+  '#14b8a6', // teal
+  '#6b7280', // grey
+] as const;
 
 export type AuthMode = 'none' | 'basic';
 
@@ -74,6 +82,15 @@ export interface RequestGroup {
   requests: ApiRequest[];
   auth?: CollectionAuth; // absent in collections saved before v1.1
   variables?: KeyValue[]; // absent in collections saved before v1.3
+  color?: string; // absent in collections saved before v1.7, meaning untagged
+  /**
+   * Sidebar position. Absent in collections saved before v1.7, and the reason
+   * this field has to exist at all: collections are one file each and arrive in
+   * `readdir` order, which is not insertion order and not stable across
+   * machines. Requests need no such field - they are an array inside one file,
+   * so their order is already the order they are stored in.
+   */
+  order?: number;
 }
 
 export interface ApiResponse {
@@ -178,14 +195,26 @@ export function newGroup(): RequestGroup {
     requests: [],
     auth: { mode: 'none', basic: emptyBasicAuth() },
     variables: [],
+    color: COLLECTION_COLORS[0],
   };
 }
 
-export function newEnvironment(): Environment {
-  return {
-    id: `env-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-    name: 'New Environment',
-    color: '#6366f1',
-    variables: [],
-  };
+/** Sidebar order: explicit where set, and everything unordered trails it by name. */
+export function sortGroups(groups: RequestGroup[]): RequestGroup[] {
+  return [...groups].sort((a, b) => {
+    const ao = a.order ?? Number.MAX_SAFE_INTEGER;
+    const bo = b.order ?? Number.MAX_SAFE_INTEGER;
+    return ao === bo ? a.name.localeCompare(b.name) : ao - bo;
+  });
+}
+
+/** Move one item of a list to another index, returning a new list. */
+export function moved<T>(items: T[], from: number, to: number): T[] {
+  if (from === to || from < 0 || to < 0 || from >= items.length || to >= items.length) {
+    return items;
+  }
+  const next = [...items];
+  const [item] = next.splice(from, 1);
+  next.splice(to, 0, item);
+  return next;
 }

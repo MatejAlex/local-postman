@@ -1,6 +1,6 @@
 // Utility functions
 
-import type { ApiRequest, BasicAuth, CollectionAuth, Environment, KeyValue, RequestGroup, ResolvedRequest } from './types';
+import type { ApiRequest, BasicAuth, CollectionAuth, KeyValue, RequestGroup, ResolvedRequest } from './types';
 import { collectionAuthOf, collectionVariablesOf, mcpConfigOf, requestAuthOf } from './types';
 import { mcpParamsFor } from './mcp';
 
@@ -13,26 +13,20 @@ export function variableMapOf(rows: KeyValue[]): Record<string, string> {
   return map;
 }
 
-/** Build a flat variable map from an environment's enabled variables. */
-export function variableMap(env: Environment | null): Record<string, string> {
-  return env ? variableMapOf(env.variables) : {};
-}
-
 /** Build a flat variable map from a collection's own enabled variables. */
 export function collectionVariableMap(group: RequestGroup | null): Record<string, string> {
   return group ? variableMapOf(collectionVariablesOf(group)) : {};
 }
 
 /**
- * Everything a request in this collection can reference.
- * The environment wins on a name clash, so one collection-wide default can be
- * overridden per environment. This is the precedence Postman uses.
+ * Everything a request can reference: its collection's variables, and nothing
+ * else. There used to be a second, global set of environment variables layered
+ * on top of these. It was removed in v1.7 because it did the same job twice -
+ * a collection already scopes its own variables, and having two places a
+ * `{{key}}` could come from mostly produced surprise about which one won.
  */
-export function requestVariables(
-  group: RequestGroup | null,
-  env: Environment | null
-): Record<string, string> {
-  return { ...collectionVariableMap(group), ...variableMap(env) };
+export function requestVariables(group: RequestGroup | null): Record<string, string> {
+  return collectionVariableMap(group);
 }
 
 /** Replace every {{key}} occurrence using the variable map. */
@@ -103,8 +97,8 @@ export function authHeaderFor(
 }
 
 /** Resolve a request into a concrete URL / headers / body ready for the proxy. */
-export function resolveRequest(req: ApiRequest, group: RequestGroup | null, env: Environment | null) {
-  const vars = requestVariables(group, env);
+export function resolveRequest(req: ApiRequest, group: RequestGroup | null) {
+  const vars = requestVariables(group);
   const collectionAuth = group ? collectionAuthOf(group) : null;
   const url = buildUrl(req.url, req.params, vars);
 
@@ -139,14 +133,13 @@ export function resolveRequest(req: ApiRequest, group: RequestGroup | null, env:
  * The URL, headers and auth resolve exactly as an HTTP request's do - that is
  * the point of MCP being a kind rather than a separate entity. What is extra is
  * that `{{variables}}` also reach the target and the arguments, so a document
- * path or a query can come from the environment like anything else.
+ * path or a query can come from the collection like anything else.
  */
 export function resolveMcpRequest(
   req: ApiRequest,
-  group: RequestGroup | null,
-  env: Environment | null
+  group: RequestGroup | null
 ): { resolved: ResolvedRequest } | { error: string } {
-  const vars = requestVariables(group, env);
+  const vars = requestVariables(group);
   const config = mcpConfigOf(req);
 
   const substituted = {
@@ -162,7 +155,7 @@ export function resolveMcpRequest(
 
   // Reuse the HTTP path for everything the two kinds share, then drop the body:
   // an MCP call's body is built by the route from the method and params.
-  const base = resolveRequest({ ...req, bodyType: 'none' }, group, env);
+  const base = resolveRequest({ ...req, bodyType: 'none' }, group);
 
   return {
     resolved: {

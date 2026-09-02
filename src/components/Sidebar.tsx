@@ -1,9 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import type { ApiRequest, CollectionAuth, Environment, KeyValue, RequestGroup } from '../lib/types';
-import { badgeOf, collectionAuthOf, collectionVariablesOf } from '../lib/types';
-import EnvironmentManager from './EnvironmentManager';
+import type { ApiRequest, CollectionAuth, KeyValue, RequestGroup } from '../lib/types';
+import { COLLECTION_COLORS, badgeOf, collectionAuthOf, collectionVariablesOf } from '../lib/types';
+import { useDragList } from '../lib/useDragList';
 import BasicAuthFields from './BasicAuthFields';
 import ConfirmDialog from './ConfirmDialog';
 import KeyValueEditor from './KeyValueEditor';
@@ -12,17 +12,12 @@ import { variableMapOf } from '../lib/utils';
 export interface CollectionSettings {
   auth: CollectionAuth;
   variables: KeyValue[];
+  color: string;
 }
 
 interface Props {
   groups: RequestGroup[];
-  environments: Environment[];
-  activeEnvId: string | null;
   activeRequestId: string | null;
-  envVars: Record<string, string>;
-  onSelectActiveEnv: (id: string | null) => void;
-  onSaveEnv: (env: Environment) => void;
-  onDeleteEnv: (id: string) => void;
   onAddGroup: () => void;
   onRenameGroup: (id: string, name: string) => void;
   onDeleteGroup: (id: string) => void;
@@ -30,21 +25,15 @@ interface Props {
   onAddRequest: (groupId: string, kind?: 'http' | 'mcp') => void;
   onSelectRequest: (req: ApiRequest) => void;
   onDeleteRequest: (groupId: string, requestId: string) => void;
+  onReorderGroups: (from: number, to: number) => void;
+  onReorderRequests: (groupId: string, from: number, to: number) => void;
 }
 
 export default function Sidebar(props: Props) {
+  const drag = useDragList('collection', props.onReorderGroups);
+
   return (
     <aside className="w-72 shrink-0 flex flex-col bg-[var(--bg-elev)] border-r border-[var(--border)] overflow-hidden">
-      <div className="p-3 border-b border-[var(--border)]">
-        <EnvironmentManager
-          environments={props.environments}
-          activeId={props.activeEnvId}
-          onSelectActive={props.onSelectActiveEnv}
-          onSave={props.onSaveEnv}
-          onDelete={props.onDeleteEnv}
-        />
-      </div>
-
       <div className="flex items-center justify-between px-3 pt-3 pb-1">
         <span className="text-xs font-semibold uppercase tracking-wide text-[var(--muted-fg)]">
           Collections
@@ -64,18 +53,20 @@ export default function Sidebar(props: Props) {
             No collections yet. Create a group to get started.
           </p>
         )}
-        {props.groups.map((group) => (
+        {props.groups.map((group, index) => (
           <GroupNode
             key={group.id}
             group={group}
             activeRequestId={props.activeRequestId}
-            envVars={props.envVars}
+            dragProps={drag.itemProps(index)}
+            isDropTarget={drag.overIndex === index}
             onRename={(name) => props.onRenameGroup(group.id, name)}
             onDelete={() => props.onDeleteGroup(group.id)}
             onSaveSettings={(settings) => props.onSaveCollection(group.id, settings)}
             onAddRequest={(kind) => props.onAddRequest(group.id, kind)}
             onSelectRequest={props.onSelectRequest}
             onDeleteRequest={(rid) => props.onDeleteRequest(group.id, rid)}
+            onReorderRequests={(from, to) => props.onReorderRequests(group.id, from, to)}
           />
         ))}
       </div>
@@ -86,24 +77,29 @@ export default function Sidebar(props: Props) {
 function GroupNode({
   group,
   activeRequestId,
-  envVars,
+  dragProps,
+  isDropTarget,
   onRename,
   onDelete,
   onSaveSettings,
   onAddRequest,
   onSelectRequest,
   onDeleteRequest,
+  onReorderRequests,
 }: {
   group: RequestGroup;
   activeRequestId: string | null;
-  envVars: Record<string, string>;
+  dragProps: React.HTMLAttributes<HTMLElement> & { draggable: boolean };
+  isDropTarget: boolean;
   onRename: (name: string) => void;
   onDelete: () => void;
   onSaveSettings: (settings: CollectionSettings) => void;
   onAddRequest: (kind?: 'http' | 'mcp') => void;
   onSelectRequest: (req: ApiRequest) => void;
   onDeleteRequest: (requestId: string) => void;
+  onReorderRequests: (from: number, to: number) => void;
 }) {
+  const reqDrag = useDragList('request', onReorderRequests);
   const [expanded, setExpanded] = useState(true);
   const [renaming, setRenaming] = useState(false);
   const [editingSettings, setEditingSettings] = useState(false);
@@ -124,7 +120,18 @@ function GroupNode({
 
   return (
     <div className="mb-1">
-      <div className="group flex items-center gap-1 px-1.5 py-1.5 rounded-md hover:bg-[var(--hover)]">
+      <div
+        {...dragProps}
+        className={`group flex items-center gap-1 px-1.5 py-1.5 rounded-md hover:bg-[var(--hover)] ${
+          isDropTarget ? 'outline outline-1 outline-[var(--accent)]' : ''
+        }`}
+      >
+        <span
+          className="w-3 shrink-0 cursor-grab select-none text-xs opacity-0 group-hover:opacity-100 text-[var(--muted-fg)]"
+          title="Drag to reorder"
+        >
+          ⠿
+        </span>
         <button
           onClick={() => setExpanded((v) => !v)}
           className="w-4 text-xs text-[var(--muted-fg)]"
@@ -150,10 +157,14 @@ function GroupNode({
         ) : (
           <span
             onDoubleClick={() => setRenaming(true)}
-            className="flex-1 text-sm font-medium truncate cursor-default"
+            className="flex flex-1 items-center gap-2 text-sm font-medium truncate cursor-default"
             title="Double-click to rename"
           >
-            {group.name}
+            <span
+              className="w-2.5 h-2.5 rounded-full shrink-0"
+              style={{ background: group.color ?? 'transparent' }}
+            />
+            <span className="truncate">{group.name}</span>
           </span>
         )}
         <span className="text-xs text-[var(--muted-fg)]">{group.requests.length}</span>
@@ -193,13 +204,14 @@ function GroupNode({
 
       {expanded && (
         <div className="ml-4 border-l border-[var(--border)]">
-          {group.requests.map((req) => (
+          {group.requests.map((req, index) => (
             <div
               key={req.id}
+              {...reqDrag.itemProps(index)}
               onClick={() => onSelectRequest(req)}
               className={`group flex items-center gap-2 pl-2 pr-1 py-1.5 rounded-md cursor-pointer ${
                 activeRequestId === req.id ? 'bg-[var(--accent-soft)]' : 'hover:bg-[var(--hover)]'
-              }`}
+              } ${reqDrag.overIndex === index ? 'outline outline-1 outline-[var(--accent)]' : ''}`}
             >
               <span className={`text-[10px] font-bold w-12 shrink-0 method-${badgeOf(req)}`}>
                 {badgeOf(req)}
@@ -241,7 +253,7 @@ function GroupNode({
           groupName={group.name}
           auth={auth}
           variables={variables}
-          envVars={envVars}
+          color={group.color ?? COLLECTION_COLORS[0]}
           onClose={() => setEditingSettings(false)}
           onSave={(settings) => {
             onSaveSettings(settings);
@@ -288,24 +300,21 @@ function CollectionSettingsModal({
   groupName,
   auth,
   variables,
-  envVars,
+  color,
   onClose,
   onSave,
 }: {
   groupName: string;
   auth: CollectionAuth;
   variables: KeyValue[];
-  envVars: Record<string, string>;
+  color: string;
   onClose: () => void;
   onSave: (settings: CollectionSettings) => void;
 }) {
-  const [draft, setDraft] = useState<CollectionSettings>({ auth, variables });
+  const [draft, setDraft] = useState<CollectionSettings>({ auth, variables, color });
 
   // Preview against the draft, so a token typed here resolves in the auth fields straight away.
-  const vars: Record<string, string> = { ...variableMapOf(draft.variables), ...envVars };
-  const shadowed = draft.variables.filter(
-    (v) => v.enabled && v.key.trim() && Object.prototype.hasOwnProperty.call(envVars, v.key)
-  );
+  const vars: Record<string, string> = variableMapOf(draft.variables);
 
   return (
     <div
@@ -334,13 +343,33 @@ function CollectionSettingsModal({
             />
             <p className="mt-2 text-xs text-[var(--muted-fg)]">
               Available to every request in {groupName}, in the URL, params, headers and body.
-              The active environment wins on a name clash.
+              This collection is the only place its variables come from.
             </p>
-            {shadowed.length > 0 && (
-              <p className="mt-1 text-xs text-[var(--warn)]">
-                Overridden by the active environment: {shadowed.map((v) => v.key).join(', ')}
-              </p>
-            )}
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted-fg)] mb-2">
+              Colour
+            </p>
+            <div className="flex items-center gap-2">
+              {COLLECTION_COLORS.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setDraft({ ...draft, color: c })}
+                  className={`w-6 h-6 rounded-full transition-transform ${
+                    draft.color === c
+                      ? 'ring-2 ring-offset-2 ring-[var(--fg)] ring-offset-[var(--bg-elev)] scale-110'
+                      : 'hover:scale-110'
+                  }`}
+                  style={{ background: c }}
+                  title={c}
+                />
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-[var(--muted-fg)]">
+              Tags the collection in the sidebar and tints the header while one of its requests is
+              open, so which estate you are pointed at is visible without reading the URL.
+            </p>
           </div>
 
           <div>

@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from 'react';
 import type {
   ApiRequest,
   ApiResponse,
-  Environment,
   HistoryItem,
   RequestGroup,
   ResolvedRequest,
@@ -12,19 +11,19 @@ import type {
 import {
   APP_VERSION,
   collectionAuthOf,
+  moved,
   newGroup,
   newMcpRequest,
   newRequest,
   requestKindOf,
+  sortGroups,
 } from '../src/lib/types';
-import { requestVariables, resolveMcpRequest, resolveRequest, variableMap } from '../src/lib/utils';
+import { requestVariables, resolveMcpRequest, resolveRequest } from '../src/lib/utils';
 import {
   appendHistory,
   clearHistory,
-  deleteEnvironment,
   deleteGroup,
   loadAll,
-  saveEnvironment,
   saveGroup,
   sendResolved,
 } from '../src/lib/storage';
@@ -37,10 +36,8 @@ import HistoryPanel from '../src/components/HistoryPanel';
 import HistoryDetail from '../src/components/HistoryDetail';
 
 export default function Home() {
-  const [environments, setEnvironments] = useState<Environment[]>([]);
   const [groups, setGroups] = useState<RequestGroup[]>([]);
   const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [activeEnvId, setActiveEnvId] = useState<string | null>(null);
   const [activeRequest, setActiveRequest] = useState<ApiRequest | null>(null);
   const [response, setResponse] = useState<ApiResponse | null>(null);
   const [isSending, setIsSending] = useState(false);
@@ -52,22 +49,19 @@ export default function Home() {
 
   useEffect(() => {
     loadAll().then((snap) => {
-      setEnvironments(snap.environments);
-      setGroups(snap.groups);
+      // Collections arrive in readdir order, which is not the order they were
+      // made in and not stable between machines. Sort on the way in.
+      setGroups(sortGroups(snap.groups));
       setHistory(snap.history);
-      if (snap.environments[0]) setActiveEnvId(snap.environments[0].id);
       setLoaded(true);
     });
   }, []);
-
-  const activeEnv = environments.find((e) => e.id === activeEnvId) ?? null;
-  const envVars = variableMap(activeEnv);
 
   const activeGroup = activeRequest
     ? (groups.find((g) => g.requests.some((r) => r.id === activeRequest.id)) ?? null)
     : null;
   const activeCollectionAuth = activeGroup ? collectionAuthOf(activeGroup) : null;
-  const vars = requestVariables(activeGroup, activeEnv);
+  const vars = requestVariables(activeGroup);
 
   // Persist a group, debounced per-group so rapid edits collapse into one write.
   const queueSaveGroup = (group: RequestGroup) => {
@@ -101,7 +95,7 @@ export default function Home() {
 
     let resolved: ResolvedRequest;
     if (requestKindOf(activeRequest) === 'mcp') {
-      const built = resolveMcpRequest(activeRequest, activeGroup, activeEnv);
+      const built = resolveMcpRequest(activeRequest, activeGroup);
       if ('error' in built) {
         // A malformed arguments box is the user's typo, not a failed request, so
         // it never reaches the network and never lands in history.
@@ -119,7 +113,7 @@ export default function Home() {
       }
       resolved = built.resolved;
     } else {
-      resolved = resolveRequest(activeRequest, activeGroup, activeEnv);
+      resolved = resolveRequest(activeRequest, activeGroup);
     }
 
     setIsSending(true);
@@ -180,7 +174,12 @@ export default function Home() {
     if (!target) {
       return;
     }
-    const touched = { ...target, auth: settings.auth, variables: settings.variables };
+    const touched = {
+      ...target,
+      auth: settings.auth,
+      variables: settings.variables,
+      color: settings.color,
+    };
     replaceGroup(touched);
     saveGroup(touched);
   };
@@ -221,20 +220,27 @@ export default function Home() {
     }
   };
 
-  // ---- Environments ----
-  const handleSaveEnv = (env: Environment) => {
-    setEnvironments((prev) => {
-      const exists = prev.some((e) => e.id === env.id);
-      return exists ? prev.map((e) => (e.id === env.id ? env : e)) : [...prev, env];
-    });
-    if (!activeEnvId) setActiveEnvId(env.id);
-    saveEnvironment(env);
+  // ---- Reordering ----
+  /**
+   * Persist the new sidebar order. Every collection is rewritten because `order`
+   * is a position in one list: moving one row shifts everything after it, and a
+   * half-written list would sort into an order nobody asked for.
+   */
+  const handleReorderGroups = (from: number, to: number) => {
+    const next = moved(groups, from, to).map((g, i) => ({ ...g, order: i }));
+    setGroups(next);
+    next.forEach(saveGroup);
   };
 
-  const handleDeleteEnv = (id: string) => {
-    setEnvironments((prev) => prev.filter((e) => e.id !== id));
-    if (activeEnvId === id) setActiveEnvId(null);
-    deleteEnvironment(id);
+  /** Requests are an array inside one file, so their order is just that array. */
+  const handleReorderRequests = (groupId: string, from: number, to: number) => {
+    const target = groups.find((g) => g.id === groupId);
+    if (!target) {
+      return;
+    }
+    const touched = { ...target, requests: moved(target.requests, from, to) };
+    replaceGroup(touched);
+    saveGroup(touched);
   };
 
   const handleClearHistory = () => {
@@ -245,8 +251,8 @@ export default function Home() {
   return (
     <div className="flex flex-col h-screen">
       <Header
-        envColor={activeEnv?.color ?? null}
-        envName={activeEnv?.name ?? null}
+        color={activeGroup?.color ?? null}
+        collectionName={activeGroup?.name ?? null}
         showHistory={showHistory}
         onToggleHistory={() => setShowHistory((v) => !v)}
       />
@@ -254,13 +260,7 @@ export default function Home() {
       <div className="flex flex-1 overflow-hidden">
         <Sidebar
           groups={groups}
-          environments={environments}
-          activeEnvId={activeEnvId}
           activeRequestId={activeRequest?.id ?? null}
-          envVars={envVars}
-          onSelectActiveEnv={setActiveEnvId}
-          onSaveEnv={handleSaveEnv}
-          onDeleteEnv={handleDeleteEnv}
           onAddGroup={handleAddGroup}
           onRenameGroup={handleRenameGroup}
           onDeleteGroup={handleDeleteGroup}
@@ -271,6 +271,8 @@ export default function Home() {
             setResponse(null);
           }}
           onDeleteRequest={handleDeleteRequest}
+          onReorderGroups={handleReorderGroups}
+          onReorderRequests={handleReorderRequests}
         />
 
         <main className="flex-1 flex flex-col overflow-hidden bg-[var(--bg)]">
@@ -317,13 +319,13 @@ export default function Home() {
 }
 
 function Header({
-  envColor,
-  envName,
+  color,
+  collectionName,
   showHistory,
   onToggleHistory,
 }: {
-  envColor: string | null;
-  envName: string | null;
+  color: string | null;
+  collectionName: string | null;
   showHistory: boolean;
   onToggleHistory: () => void;
 }) {
@@ -334,16 +336,16 @@ function Header({
   return (
     <header
       className="flex items-center gap-3 px-4 h-12 shrink-0 border-b border-[var(--border)] bg-[var(--bg-elev)]"
-      style={envColor ? { boxShadow: `inset 4px 0 0 ${envColor}` } : undefined}
+      style={color ? { boxShadow: `inset 4px 0 0 ${color}` } : undefined}
     >
       <span className="font-semibold tracking-tight">local-postman</span>
       <span className="text-xs px-1.5 py-0.5 rounded bg-[var(--bg-elev-2)] text-[var(--muted-fg)]">
         {APP_VERSION}
       </span>
-      {envName && (
+      {collectionName && (
         <span className="flex items-center gap-1.5 text-xs text-[var(--muted-fg)]">
-          <span className="w-2 h-2 rounded-full" style={{ background: envColor ?? undefined }} />
-          {envName}
+          <span className="w-2 h-2 rounded-full" style={{ background: color ?? undefined }} />
+          {collectionName}
         </span>
       )}
       <div className="ml-auto flex items-center gap-1">

@@ -9,7 +9,11 @@
       "url": "{{base_url}}/users",
       "params": [],
       "headers": [
-        { "key": "Accept", "value": "application/json", "enabled": true }
+        {
+          "key": "Accept",
+          "value": "application/json",
+          "enabled": true
+        }
       ],
       "body": "",
       "bodyType": "none"
@@ -21,10 +25,28 @@
       "url": "{{base_url}}/posts",
       "params": [],
       "headers": [
-        { "key": "Content-Type", "value": "application/json", "enabled": true }
+        {
+          "key": "Content-Type",
+          "value": "application/json",
+          "enabled": true
+        }
       ],
       "body": "{\n  \"title\": \"Hello\",\n  \"body\": \"From local-postman\",\n  \"userId\": 1\n}",
       "bodyType": "json"
     }
-  ]
+  ],
+  "variables": [
+    {
+      "key": "base_url",
+      "value": "https://jsonplaceholder.typicode.com",
+      "enabled": true
+    },
+    {
+      "key": "api_key",
+      "value": "dev-key-123",
+      "enabled": true
+    }
+  ],
+  "color": "#3b82f6",
+  "order": 0
 }
