@@ -190,7 +190,13 @@ export async function POST(req: NextRequest) {
     );
 
     if (init.status >= 400) {
-      // A 401 here is the common case and the useful one: the headers are wrong.
+      // Say which of the two things went wrong and stop there. The body and the
+      // WWW-Authenticate header carry the server's own reason, and it is always
+      // more specific than anything we could infer from a status code.
+      const why =
+        init.status === 401 || init.status === 403
+          ? `the server rejected the credentials (${init.status})`
+          : `the server answered ${init.status}`;
       return NextResponse.json({
         status: init.status,
         statusText: init.statusText,
@@ -199,7 +205,7 @@ export async function POST(req: NextRequest) {
         contentType: init.headers.get('content-type') ?? '',
         timeMs: Date.now() - started,
         sizeBytes: new TextEncoder().encode(init.raw).length,
-        error: `initialize failed with ${init.status}. Check the headers this server requires.`,
+        error: `MCP initialize failed: ${why}.`,
       });
     }
 

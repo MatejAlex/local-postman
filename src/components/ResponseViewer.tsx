@@ -41,7 +41,10 @@ export default function ResponseViewer({ response, isSending }: Props) {
     );
   }
 
-  if (response.error) {
+  // Only when nothing came back at all - a DNS failure, a refused connection, a
+  // timeout, or a request this app rejected before sending it. There is no
+  // status, no body and no headers to show, so the message is the whole story.
+  if (response.error && response.status === 0) {
     return (
       <div className="p-4">
         <div className="flex items-center gap-2 mb-2 text-[var(--danger)] text-sm font-medium">
@@ -57,6 +60,22 @@ export default function ResponseViewer({ response, isSending }: Props) {
 
   return (
     <div className="flex flex-col h-full">
+      {/* A failure that still produced a response: say what went wrong, then show
+          the response anyway. The server's own explanation is almost always more
+          specific than ours - a 401 from an MCP server names the credential it
+          rejected, and this banner only says a credential was rejected. */}
+      {response.error && (
+        <div className="flex items-start gap-2 px-4 py-2 border-b border-[var(--border)]">
+          <span className="mt-1.5 w-2 h-2 rounded-full bg-[var(--danger)] shrink-0" />
+          <p className="text-sm text-[var(--danger)] font-mono">
+            {response.error}
+            <span className="block mt-0.5 text-xs text-[var(--muted-fg)] font-sans">
+              The server&rsquo;s own response is below.
+            </span>
+          </p>
+        </div>
+      )}
+
       {/* Status bar */}
       <div className="flex items-center gap-4 px-4 py-2 border-b border-[var(--border)] text-sm">
         <span className="font-semibold" style={{ color: statusColor(response.status) }}>
