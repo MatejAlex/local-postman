@@ -103,5 +103,6 @@ body {
 .method-PUT { color: var(--info); }
 .method-PATCH { color: #c084fc; }
 .method-DELETE { color: var(--danger); }
+.method-MCP { color: var(--accent); }
 .method-HEAD,
 .method-OPTIONS { color: var(--muted-fg); }

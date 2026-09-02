@@ -7,9 +7,17 @@ import type {
   Environment,
   HistoryItem,
   RequestGroup,
+  ResolvedRequest,
 } from '../src/lib/types';
-import { APP_VERSION, collectionAuthOf, newGroup, newRequest } from '../src/lib/types';
-import { requestVariables, resolveRequest, variableMap } from '../src/lib/utils';
+import {
+  APP_VERSION,
+  collectionAuthOf,
+  newGroup,
+  newMcpRequest,
+  newRequest,
+  requestKindOf,
+} from '../src/lib/types';
+import { requestVariables, resolveMcpRequest, resolveRequest, variableMap } from '../src/lib/utils';
 import {
   appendHistory,
   clearHistory,
@@ -90,9 +98,32 @@ export default function Home() {
   // ---- Send ----
   const handleSend = async () => {
     if (!activeRequest) return;
+
+    let resolved: ResolvedRequest;
+    if (requestKindOf(activeRequest) === 'mcp') {
+      const built = resolveMcpRequest(activeRequest, activeGroup, activeEnv);
+      if ('error' in built) {
+        // A malformed arguments box is the user's typo, not a failed request, so
+        // it never reaches the network and never lands in history.
+        setResponse({
+          status: 0,
+          statusText: '',
+          headers: {},
+          body: '',
+          contentType: '',
+          timeMs: 0,
+          sizeBytes: 0,
+          error: built.error,
+        });
+        return;
+      }
+      resolved = built.resolved;
+    } else {
+      resolved = resolveRequest(activeRequest, activeGroup, activeEnv);
+    }
+
     setIsSending(true);
     setResponse(null);
-    const resolved = resolveRequest(activeRequest, activeGroup, activeEnv);
     const resp = await sendResolved(resolved);
     setResponse(resp);
     setIsSending(false);
@@ -164,12 +195,12 @@ export default function Home() {
   };
 
   // ---- Requests ----
-  const handleAddRequest = (groupId: string) => {
+  const handleAddRequest = (groupId: string, kind: 'http' | 'mcp' = 'http') => {
     const target = groups.find((g) => g.id === groupId);
     if (!target) {
       return;
     }
-    const req = newRequest();
+    const req = kind === 'mcp' ? newMcpRequest() : newRequest();
     const touched = { ...target, requests: [...target.requests, req] };
     replaceGroup(touched);
     saveGroup(touched);

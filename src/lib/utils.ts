@@ -1,7 +1,8 @@
 // Utility functions
 
-import type { ApiRequest, BasicAuth, CollectionAuth, Environment, KeyValue, RequestGroup } from './types';
-import { collectionAuthOf, collectionVariablesOf, requestAuthOf } from './types';
+import type { ApiRequest, BasicAuth, CollectionAuth, Environment, KeyValue, RequestGroup, ResolvedRequest } from './types';
+import { collectionAuthOf, collectionVariablesOf, mcpConfigOf, requestAuthOf } from './types';
+import { mcpParamsFor } from './mcp';
 
 /** Flatten key/value rows into a lookup, skipping the disabled and the unnamed. */
 export function variableMapOf(rows: KeyValue[]): Record<string, string> {
@@ -130,6 +131,46 @@ export function resolveRequest(req: ApiRequest, group: RequestGroup | null, env:
   }
 
   return { url, method: req.method, headers, body };
+}
+
+/**
+ * Resolve an MCP request, or explain what is wrong with it.
+ *
+ * The URL, headers and auth resolve exactly as an HTTP request's do - that is
+ * the point of MCP being a kind rather than a separate entity. What is extra is
+ * that `{{variables}}` also reach the target and the arguments, so a document
+ * path or a query can come from the environment like anything else.
+ */
+export function resolveMcpRequest(
+  req: ApiRequest,
+  group: RequestGroup | null,
+  env: Environment | null
+): { resolved: ResolvedRequest } | { error: string } {
+  const vars = requestVariables(group, env);
+  const config = mcpConfigOf(req);
+
+  const substituted = {
+    ...config,
+    target: substitute(config.target, vars),
+    args: substitute(config.args, vars),
+  };
+
+  const built = mcpParamsFor(substituted);
+  if ('error' in built) {
+    return built;
+  }
+
+  // Reuse the HTTP path for everything the two kinds share, then drop the body:
+  // an MCP call's body is built by the route from the method and params.
+  const base = resolveRequest({ ...req, bodyType: 'none' }, group, env);
+
+  return {
+    resolved: {
+      ...base,
+      method: 'POST',
+      mcp: { method: substituted.method, params: built.params },
+    },
+  };
 }
 
 export function formatTime(ms: number): string {

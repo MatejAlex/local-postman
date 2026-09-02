@@ -39,7 +39,7 @@ export default function HistoryDetail({ item, onReplay, onClose }: Props) {
         <div className="flex items-start gap-3 px-4 py-3 border-b border-[var(--border)]">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <span className={`text-xs font-bold method-${item.method}`}>{item.method}</span>
+              <span className={`text-xs font-bold method-${badge(item)}`}>{badge(item)}</span>
               <span className="text-sm font-medium truncate">
                 {item.name?.trim() || <span className="text-[var(--muted-fg)] italic">Unnamed request</span>}
               </span>
@@ -147,4 +147,9 @@ function Section({ label, children }: { label: string; children: React.ReactNode
       {children}
     </div>
   );
+}
+
+/** A replayed MCP call is a POST on the wire; the badge must not say so. */
+function badge(item: HistoryItem): string {
+  return item.resolved.mcp ? 'MCP' : item.method;
 }

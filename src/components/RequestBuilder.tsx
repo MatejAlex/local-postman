@@ -2,7 +2,9 @@
 
 import { useState } from 'react';
 import type { ApiRequest, BodyType, CollectionAuth, Method, RequestAuthMode } from '../lib/types';
-import { METHODS, requestAuthOf } from '../lib/types';
+import { METHODS, mcpConfigOf, requestAuthOf, requestKindOf } from '../lib/types';
+import type { McpMethod } from '../lib/mcp';
+import { MCP_METHODS, MCP_TARGET_LABEL, mcpNeedsTarget, mcpTakesArguments } from '../lib/mcp';
 import { prettyJson } from '../lib/utils';
 import KeyValueEditor from './KeyValueEditor';
 import BasicAuthFields from './BasicAuthFields';
@@ -16,7 +18,7 @@ interface Props {
   vars: Record<string, string>;
 }
 
-type Tab = 'params' | 'auth' | 'headers' | 'body';
+type Tab = 'params' | 'auth' | 'headers' | 'body' | 'mcp';
 
 const BODY_TYPES: BodyType[] = ['none', 'json', 'raw'];
 
@@ -31,7 +33,13 @@ const TAB_LABELS: Record<Tab, string> = {
   auth: 'Auth',
   headers: 'Headers',
   body: 'Body',
+  mcp: 'MCP',
 };
+
+// An MCP call has no query params and no body of its own, so those two tabs
+// would only ever be empty. Fewer tabs is the point.
+const HTTP_TABS: Tab[] = ['params', 'auth', 'headers', 'body'];
+const MCP_TABS: Tab[] = ['mcp', 'auth', 'headers'];
 
 export default function RequestBuilder({
   request,
@@ -41,10 +49,17 @@ export default function RequestBuilder({
   collectionAuth,
   vars,
 }: Props) {
-  const [tab, setTab] = useState<Tab>('params');
+  const isMcp = requestKindOf(request) === 'mcp';
+  const tabs = isMcp ? MCP_TABS : HTTP_TABS;
+  const [tab, setTab] = useState<Tab>(tabs[0]);
 
   const patch = (p: Partial<ApiRequest>) => onChange({ ...request, ...p });
   const auth = requestAuthOf(request);
+  const mcp = mcpConfigOf(request);
+  const patchMcp = (p: Partial<typeof mcp>) => patch({ mcp: { ...mcp, ...p } });
+
+  // Switching request kind can leave the old tab selected and showing nothing.
+  const activeTab = tabs.includes(tab) ? tab : tabs[0];
 
   const count = (n: number) => (n > 0 ? <span className="ml-1.5 text-xs text-[var(--accent)]">{n}</span> : null);
   const activeParams = request.params.filter((p) => p.enabled && p.key.trim()).length;
@@ -67,22 +82,31 @@ export default function RequestBuilder({
 
       {/* URL bar */}
       <div className="flex items-center gap-2 px-4 pb-3">
-        <select
-          value={request.method}
-          onChange={(e) => patch({ method: e.target.value as Method })}
-          className={`px-2 py-2 text-sm font-semibold rounded-md bg-[var(--bg-elev-2)] border border-[var(--border)] outline-none cursor-pointer method-${request.method}`}
-        >
-          {METHODS.map((m) => (
-            <option key={m} value={m} className="text-[var(--fg)] bg-[var(--bg-elev)]">
-              {m}
-            </option>
-          ))}
-        </select>
+        {isMcp ? (
+          <span
+            className="px-2 py-2 text-sm font-semibold rounded-md bg-[var(--bg-elev-2)] border border-[var(--border)] method-MCP"
+            title="MCP over Streamable HTTP. The transport is a POST; the session handshake is handled for you."
+          >
+            MCP
+          </span>
+        ) : (
+          <select
+            value={request.method}
+            onChange={(e) => patch({ method: e.target.value as Method })}
+            className={`px-2 py-2 text-sm font-semibold rounded-md bg-[var(--bg-elev-2)] border border-[var(--border)] outline-none cursor-pointer method-${request.method}`}
+          >
+            {METHODS.map((m) => (
+              <option key={m} value={m} className="text-[var(--fg)] bg-[var(--bg-elev)]">
+                {m}
+              </option>
+            ))}
+          </select>
+        )}
         <input
           value={request.url}
           onChange={(e) => patch({ url: e.target.value })}
           onKeyDown={(e) => e.key === 'Enter' && canSend && onSend()}
-          placeholder="https://api.example.com/{{path}}"
+          placeholder={isMcp ? 'http://localhost:8000/mcp' : 'https://api.example.com/{{path}}'}
           className="flex-1 px-3 py-2 text-sm rounded-md bg-[var(--bg-elev-2)] border border-[var(--border)] focus:border-[var(--accent)] outline-none font-mono"
         />
         <button
@@ -96,12 +120,12 @@ export default function RequestBuilder({
 
       {/* Tabs */}
       <div className="flex gap-1 px-4 border-b border-[var(--border)]">
-        {(['params', 'auth', 'headers', 'body'] as Tab[]).map((t) => (
+        {tabs.map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
             className={`px-3 py-2 text-sm border-b-2 -mb-px transition-colors ${
-              tab === t
+              activeTab === t
                 ? 'border-[var(--accent)] text-[var(--fg)]'
                 : 'border-transparent text-[var(--muted-fg)] hover:text-[var(--fg)]'
             }`}
@@ -116,10 +140,13 @@ export default function RequestBuilder({
 
       {/* Tab content */}
       <div className="flex-1 overflow-auto p-4">
-        {tab === 'params' && (
+        {activeTab === 'mcp' && (
+          <McpPanel config={mcp} onChange={patchMcp} />
+        )}
+        {activeTab === 'params' && (
           <KeyValueEditor rows={request.params} onChange={(params) => patch({ params })} />
         )}
-        {tab === 'auth' && (
+        {activeTab === 'auth' && (
           <div className="flex flex-col gap-4 max-w-xl">
             <div className="flex items-center gap-2">
               {AUTH_MODES.map((m) => (
@@ -154,14 +181,14 @@ export default function RequestBuilder({
             )}
           </div>
         )}
-        {tab === 'headers' && (
+        {activeTab === 'headers' && (
           <KeyValueEditor
             rows={request.headers}
             onChange={(headers) => patch({ headers })}
             keyPlaceholder="Header"
           />
         )}
-        {tab === 'body' && (
+        {activeTab === 'body' && (
           <div className="flex flex-col gap-3 h-full">
             <div className="flex items-center gap-2">
               {BODY_TYPES.map((bt) => (
@@ -200,6 +227,84 @@ export default function RequestBuilder({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * The whole MCP surface: which call, what it targets, and its arguments.
+ *
+ * Deliberately not here: connecting is not a step (every send opens and closes
+ * its own session), there is no OAuth dance, and no server is launched for you.
+ * Those are the three things that make the reference inspector a mode you enter
+ * rather than a request you send.
+ */
+function McpPanel({
+  config,
+  onChange,
+}: {
+  config: { method: McpMethod; target: string; args: string };
+  onChange: (patch: Partial<{ method: McpMethod; target: string; args: string }>) => void;
+}) {
+  const targetLabel = MCP_TARGET_LABEL[config.method];
+  const takesArgs = mcpTakesArguments(config.method);
+
+  return (
+    <div className="flex flex-col gap-4 max-w-2xl">
+      <label className="flex flex-col gap-1.5">
+        <span className="text-xs text-[var(--muted-fg)]">Method</span>
+        <select
+          value={config.method}
+          onChange={(e) => onChange({ method: e.target.value as McpMethod })}
+          className="px-3 py-2 text-sm rounded-md bg-[var(--bg-elev-2)] border border-[var(--border)] focus:border-[var(--accent)] outline-none font-mono cursor-pointer"
+        >
+          {MCP_METHODS.map((m) => (
+            <option key={m} value={m} className="text-[var(--fg)] bg-[var(--bg-elev)]">
+              {m}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      {mcpNeedsTarget(config.method) && (
+        <label className="flex flex-col gap-1.5">
+          <span className="text-xs text-[var(--muted-fg)]">{targetLabel}</span>
+          <input
+            value={config.target}
+            onChange={(e) => onChange({ target: e.target.value })}
+            placeholder={config.method === 'resources/read' ? 'file:///…' : 'read_document'}
+            className="px-3 py-2 text-sm rounded-md bg-[var(--bg-elev-2)] border border-[var(--border)] focus:border-[var(--accent)] outline-none font-mono"
+          />
+        </label>
+      )}
+
+      {takesArgs && (
+        <label className="flex flex-col gap-1.5">
+          <span className="flex items-center text-xs text-[var(--muted-fg)]">
+            Arguments (JSON)
+            <button
+              onClick={() => onChange({ args: prettyJson(config.args) })}
+              className="ml-auto px-2 py-0.5 text-xs text-[var(--muted-fg)] hover:text-[var(--fg)]"
+            >
+              Beautify
+            </button>
+          </span>
+          <textarea
+            value={config.args}
+            onChange={(e) => onChange({ args: e.target.value })}
+            placeholder={'{\n  "query": "{{search}}"\n}'}
+            spellCheck={false}
+            rows={8}
+            className="w-full p-3 text-sm rounded-md bg-[var(--bg-elev-2)] border border-[var(--border)] focus:border-[var(--accent)] outline-none font-mono resize-none"
+          />
+        </label>
+      )}
+
+      <p className="text-xs text-[var(--muted-fg)]">
+        {takesArgs
+          ? 'Run the matching list method first to see the exact argument names. {{variables}} work here too.'
+          : 'Takes no arguments. Send it to see what this server offers.'}
+      </p>
     </div>
   );
 }

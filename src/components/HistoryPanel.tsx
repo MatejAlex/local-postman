@@ -33,8 +33,8 @@ export default function HistoryPanel({ history, onInspect, onReplay, onClear }: 
             className="px-3 py-2 border-b border-[var(--border)] hover:bg-[var(--hover)] group"
           >
             <div className="flex items-center gap-2">
-              <span className={`text-[10px] font-bold w-10 shrink-0 method-${item.method}`}>
-                {item.method}
+              <span className={`text-[10px] font-bold w-10 shrink-0 method-${badge(item)}`}>
+                {badge(item)}
               </span>
               {item.response.error ? (
                 <span className="text-xs font-semibold text-[var(--danger)]">ERR</span>
@@ -86,4 +86,9 @@ function IconButton({
       {children}
     </button>
   );
+}
+
+/** A replayed MCP call is a POST on the wire; the badge must not say so. */
+function badge(item: HistoryItem): string {
+  return item.resolved.mcp ? 'MCP' : item.method;
 }

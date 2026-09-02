@@ -49,13 +49,30 @@ export async function clearHistory(): Promise<void> {
   await put('history', []);
 }
 
-/** Send an already-resolved request through the proxy and return the structured response. */
+/**
+ * Send an already-resolved request and return the structured response.
+ *
+ * An MCP call goes to its own route because it is three HTTP requests behind a
+ * session handshake, not one - see `app/api/mcp/route.ts`. Dispatching on the
+ * resolved request rather than on the builder's state is what makes a history
+ * replay of an MCP call replay as MCP.
+ */
 export async function sendResolved(resolved: ResolvedRequest): Promise<ApiResponse> {
+  const route = resolved.mcp ? '/api/mcp' : '/api/proxy';
+  const payload = resolved.mcp
+    ? {
+        url: resolved.url,
+        headers: resolved.headers,
+        method: resolved.mcp.method,
+        params: resolved.mcp.params,
+      }
+    : resolved;
+
   try {
-    const res = await fetch('/api/proxy', {
+    const res = await fetch(route, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(resolved),
+      body: JSON.stringify(payload),
     });
     return (await res.json()) as ApiResponse;
   } catch (err) {

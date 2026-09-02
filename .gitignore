@@ -44,3 +44,6 @@ next-env.d.ts
 /storage/history.json
 # only reachable if LOCAL_POSTMAN_DIR is pointed back at the seed dir, but it holds passwords
 /storage/secrets.json
+
+# Claude Code local settings
+.claude/

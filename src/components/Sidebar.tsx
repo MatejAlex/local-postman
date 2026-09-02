@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import type { ApiRequest, CollectionAuth, Environment, KeyValue, RequestGroup } from '../lib/types';
-import { collectionAuthOf, collectionVariablesOf } from '../lib/types';
+import { badgeOf, collectionAuthOf, collectionVariablesOf } from '../lib/types';
 import EnvironmentManager from './EnvironmentManager';
 import BasicAuthFields from './BasicAuthFields';
 import ConfirmDialog from './ConfirmDialog';
@@ -27,7 +27,7 @@ interface Props {
   onRenameGroup: (id: string, name: string) => void;
   onDeleteGroup: (id: string) => void;
   onSaveCollection: (groupId: string, settings: CollectionSettings) => void;
-  onAddRequest: (groupId: string) => void;
+  onAddRequest: (groupId: string, kind?: 'http' | 'mcp') => void;
   onSelectRequest: (req: ApiRequest) => void;
   onDeleteRequest: (groupId: string, requestId: string) => void;
 }
@@ -73,7 +73,7 @@ export default function Sidebar(props: Props) {
             onRename={(name) => props.onRenameGroup(group.id, name)}
             onDelete={() => props.onDeleteGroup(group.id)}
             onSaveSettings={(settings) => props.onSaveCollection(group.id, settings)}
-            onAddRequest={() => props.onAddRequest(group.id)}
+            onAddRequest={(kind) => props.onAddRequest(group.id, kind)}
             onSelectRequest={props.onSelectRequest}
             onDeleteRequest={(rid) => props.onDeleteRequest(group.id, rid)}
           />
@@ -100,7 +100,7 @@ function GroupNode({
   onRename: (name: string) => void;
   onDelete: () => void;
   onSaveSettings: (settings: CollectionSettings) => void;
-  onAddRequest: () => void;
+  onAddRequest: (kind?: 'http' | 'mcp') => void;
   onSelectRequest: (req: ApiRequest) => void;
   onDeleteRequest: (requestId: string) => void;
 }) {
@@ -169,11 +169,18 @@ function GroupNode({
           ⚙
         </button>
         <button
-          onClick={onAddRequest}
+          onClick={() => onAddRequest('http')}
           className="opacity-0 group-hover:opacity-100 w-5 text-[var(--muted-fg)] hover:text-[var(--accent)]"
           title="Add request"
         >
           +
+        </button>
+        <button
+          onClick={() => onAddRequest('mcp')}
+          className="opacity-0 group-hover:opacity-100 w-5 text-[10px] font-bold text-[var(--muted-fg)] hover:text-[var(--accent)]"
+          title="Add MCP request"
+        >
+          M
         </button>
         <button
           onClick={() => setConfirmingDelete(true)}
@@ -194,8 +201,8 @@ function GroupNode({
                 activeRequestId === req.id ? 'bg-[var(--accent-soft)]' : 'hover:bg-[var(--hover)]'
               }`}
             >
-              <span className={`text-[10px] font-bold w-12 shrink-0 method-${req.method}`}>
-                {req.method}
+              <span className={`text-[10px] font-bold w-12 shrink-0 method-${badgeOf(req)}`}>
+                {badgeOf(req)}
               </span>
               <span className="flex-1 text-sm truncate text-[var(--fg)]">{req.name}</span>
               <button
@@ -211,12 +218,20 @@ function GroupNode({
             </div>
           ))}
           {group.requests.length === 0 && (
-            <button
-              onClick={onAddRequest}
-              className="w-full text-left pl-2 py-1.5 text-xs text-[var(--muted-fg)] hover:text-[var(--accent)]"
-            >
-              + Add request
-            </button>
+            <div className="flex flex-col">
+              <button
+                onClick={() => onAddRequest('http')}
+                className="w-full text-left pl-2 py-1.5 text-xs text-[var(--muted-fg)] hover:text-[var(--accent)]"
+              >
+                + Add request
+              </button>
+              <button
+                onClick={() => onAddRequest('mcp')}
+                className="w-full text-left pl-2 py-1.5 text-xs text-[var(--muted-fg)] hover:text-[var(--accent)]"
+              >
+                + Add MCP request
+              </button>
+            </div>
           )}
         </div>
       )}

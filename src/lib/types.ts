@@ -1,10 +1,21 @@
 // Type definitions for local-postman
 
-export const APP_VERSION = 'v1.5';
+import type { McpConfig, McpMethod } from './mcp';
+import { emptyMcpConfig } from './mcp';
+
+export const APP_VERSION = 'v1.6';
 
 export type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS';
 
 export const METHODS: Method[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
+
+/**
+ * An MCP request is still an HTTP POST, so it keeps `method`, `url` and
+ * `headers` and only swaps what goes in the body. Making it a kind rather than
+ * a separate entity is what lets collections, variables, auth and history stay
+ * one implementation instead of two.
+ */
+export type RequestKind = 'http' | 'mcp';
 
 export type BodyType = 'none' | 'json' | 'raw';
 
@@ -53,6 +64,8 @@ export interface ApiRequest {
   body: string;
   bodyType: BodyType;
   auth?: RequestAuth; // absent in collections saved before v1.1
+  kind?: RequestKind; // absent in collections saved before v1.6, meaning 'http'
+  mcp?: McpConfig; // only meaningful when kind === 'mcp'
 }
 
 export interface RequestGroup {
@@ -79,6 +92,13 @@ export interface ResolvedRequest {
   method: Method;
   headers: Record<string, string>;
   body?: string;
+  /**
+   * Present when this resolved to an MCP call. It carries the JSON-RPC method
+   * and params so a history entry replays as MCP rather than as a bare POST,
+   * which is the whole reason it lives on the resolved request and not just in
+   * the builder.
+   */
+  mcp?: { method: McpMethod; params: Record<string, unknown> };
 }
 
 export interface HistoryItem {
@@ -112,6 +132,20 @@ export function collectionVariablesOf(group: RequestGroup): KeyValue[] {
   return group.variables ?? [];
 }
 
+/** Everything saved before v1.6 is an ordinary HTTP request. */
+export function requestKindOf(req: ApiRequest): RequestKind {
+  return req.kind ?? 'http';
+}
+
+export function mcpConfigOf(req: ApiRequest): McpConfig {
+  return req.mcp ?? emptyMcpConfig();
+}
+
+/** What the method column shows. MCP requests are POSTs but never read as one. */
+export function badgeOf(req: Pick<ApiRequest, 'method' | 'kind'>): string {
+  return (req.kind ?? 'http') === 'mcp' ? 'MCP' : req.method;
+}
+
 export function newRequest(): ApiRequest {
   return {
     id: `req-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -123,6 +157,17 @@ export function newRequest(): ApiRequest {
     body: '',
     bodyType: 'none',
     auth: { mode: 'inherit', basic: emptyBasicAuth() },
+  };
+}
+
+export function newMcpRequest(): ApiRequest {
+  return {
+    ...newRequest(),
+    name: 'New MCP Request',
+    // The transport is always a POST; only the body differs from an HTTP request.
+    method: 'POST',
+    kind: 'mcp',
+    mcp: emptyMcpConfig(),
   };
 }
 
