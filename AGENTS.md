@@ -34,6 +34,14 @@ Add one from the collection header's **M** button.
 **There is no connect step.** Every send runs the whole `initialize` → `notifications/initialized` → call → `DELETE` sequence and throws the session away, so a result never depends on what you clicked earlier. That costs a round-trip and buys statelessness; a full call against a local server lands in well under 200 ms.
 Deliberately absent, and the reason this is not a fork of the reference inspector: no OAuth dance, no server-launching, no connection pane, no notifications/roots/sampling.
 
+## Native app (v2.0, in progress)
+
+`macos/` is a SwiftUI rewrite that is meant to replace the web app. `macos/README.md` covers running it and what changed.
+- It reads and writes the same `~/.local-postman` files in the same JSON shape, including the `secrets.json` password split, so both apps can be used during the switch. Keep the formats compatible until the web app is removed.
+- `macos/Sources/PostmanCore` is the port of `src/lib` plus the three API routes. It has no UI imports, and `swift test` runs on Linux. Behaviour changes belong there, with a test.
+- `macos/Sources/LocalPostman` is the SwiftUI layer and needs Xcode 26 / macOS 26 (Liquid Glass). `AppModel` owns all state and persistence.
+- Requests go straight out through `URLSession`: there is no proxy because there is no CORS. Manual redirects with cross-origin credential stripping and the 30 s timeout are kept in `HTTP.swift`.
+
 ## Architecture
 
 - `app/api/mcp/route.ts` — POST: the MCP client. One MCP call is three HTTP requests behind a session handshake, which is why it cannot be `/api/proxy` with a different body. It understands both response framings (plain JSON and SSE), unwraps the SSE one, and reports `application/json` either way so the viewer opens on Pretty. A JSON-RPC error becomes the response's `error` while the payload still fills the body; a tool that returns `isError` is a successful call and is left alone.
