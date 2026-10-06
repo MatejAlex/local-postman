@@ -95,7 +95,7 @@ final class AppModel {
         groups = snapshot.groups
         history = snapshot.history
         loadProblems = snapshot.problems
-        if let selection, selectedRequest == nil { self.selection = nil }
+        if selection != nil, selectedRequest == nil { selection = nil }
     }
 
     /// Persist a collection after a short pause, so a burst of typing is one write.
