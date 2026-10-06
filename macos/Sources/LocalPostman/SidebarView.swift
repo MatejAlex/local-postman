@@ -209,7 +209,8 @@ struct CollectionRow: View {
     private func startRename() {
         draftName = group.name
         renaming = true
-        nameFocused = true
+        // The field does not exist until this update lands; focus it on the next.
+        DispatchQueue.main.async { nameFocused = true }
     }
 
     private func commitRename() {

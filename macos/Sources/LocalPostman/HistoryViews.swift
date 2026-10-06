@@ -93,9 +93,11 @@ struct HistoryRow: View {
                     Button { model.replay(item) } label: { Image(systemName: "arrow.clockwise") }
                         .help("Send again")
                 } else {
-                    Text(item.date, format: .relative(presentation: .numeric, unitsStyle: .narrow))
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                    TimelineView(.periodic(from: .now, by: 30)) { _ in
+                        Text(item.date, format: .relative(presentation: .numeric, unitsStyle: .narrow))
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
                 }
             }
             .buttonStyle(.borderless)
@@ -123,8 +125,14 @@ struct HistoryRow: View {
 struct HistoryDetailView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
-    let item: HistoryItem
+    @State private var item: HistoryItem
+    @State private var entry: ResponseEntry
     @State private var pane = 0
+
+    init(item: HistoryItem) {
+        _item = State(initialValue: item)
+        _entry = State(initialValue: ResponseEntry(response: item.response))
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -145,7 +153,11 @@ struct HistoryDetailView: View {
                 }
                 Spacer()
                 Button {
-                    model.replay(item)
+                    // Swap the result in here rather than re-presenting the sheet.
+                    model.replay(item) { replayed in
+                        item = replayed
+                        entry = ResponseEntry(response: replayed.response)
+                    }
                 } label: {
                     Label("Send Again", systemImage: "arrow.clockwise")
                 }
@@ -169,8 +181,7 @@ struct HistoryDetailView: View {
             Divider()
 
             if pane == 0 {
-                ResponseView(entry: ResponseEntry(response: item.response), isSending: false)
-                    .id(item.id)
+                ResponseView(entry: entry, isSending: model.replaying.contains(item.id))
             } else {
                 SentRequestView(item: item)
             }

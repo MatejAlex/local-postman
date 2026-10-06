@@ -303,9 +303,9 @@ final class AppModel {
         if let selection { sendTasks[selection]?.cancel() }
     }
 
-    /// Send a history entry again, exactly as it went out the first time, and
-    /// open the result.
-    func replay(_ item: HistoryItem) {
+    /// Send a history entry again, exactly as it went out the first time. The
+    /// result opens in the detail sheet unless the caller handles it.
+    func replay(_ item: HistoryItem, onResult: ((HistoryItem) -> Void)? = nil) {
         replaying.insert(item.id)
         Task { [weak self, sender] in
             let response = await sender.send(item.resolved)
@@ -316,7 +316,7 @@ final class AppModel {
             replayed.timestamp = Date().timeIntervalSince1970 * 1000
             replayed.response = response
             self.record(replayed)
-            self.inspectedHistory = replayed
+            if let onResult { onResult(replayed) } else { self.inspectedHistory = replayed }
         }
     }
 

@@ -2,8 +2,9 @@ import PostmanCore
 import SwiftUI
 
 /// Key/value rows for params, headers and variables. There is always one blank
-/// row at the end; typing into it makes it a real row, and a row emptied of
-/// both key and value disappears.
+/// row at the end; typing into it makes it a real row. An emptied row stays
+/// until its ✕ is clicked (removing it mid-edit would steal focus), and an
+/// unnamed row is never sent.
 struct KeyValueEditor: View {
     @Binding var rows: [KeyValue]
     var keyPlaceholder = "Key"
@@ -47,10 +48,13 @@ struct KeyValueEditor: View {
         Binding(
             get: { index < rows.count ? rows[index][keyPath: path] : KeyValue()[keyPath: path] },
             set: { value in
-                var display = rows + [KeyValue()]
-                guard display.indices.contains(index) else { return }
-                display[index][keyPath: path] = value
-                rows = display.filter { !isEmpty($0) }
+                if rows.indices.contains(index) {
+                    rows[index][keyPath: path] = value
+                } else if index == rows.count {
+                    var row = KeyValue()
+                    row[keyPath: path] = value
+                    if !isEmpty(row) { rows.append(row) }
+                }
             }
         )
     }

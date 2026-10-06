@@ -271,8 +271,15 @@ struct RequestAuthPanel: View {
     private var inheritNote: some View {
         if let collectionAuth, collectionAuth.mode == .basic {
             let who = collectionAuth.basic.username.trimmingCharacters(in: .whitespaces)
-            Text("Using the collection's Basic auth\(who.isEmpty ? "" : " as **\(who)**")\(collectionAuth.basic.base64 ? "." : ", sent unencoded.")")
-                .foregroundStyle(.secondary)
+            let ending = collectionAuth.basic.base64 ? "." : ", sent unencoded."
+            Group {
+                if who.isEmpty {
+                    Text("Using the collection's Basic auth\(ending)")
+                } else {
+                    Text("Using the collection's Basic auth as \(Text(who).bold().font(smallMonoFont))\(ending)")
+                }
+            }
+            .foregroundStyle(.secondary)
         } else {
             Text("This collection has no auth set, so this request sends none. Set it on the collection to cover every request at once.")
                 .foregroundStyle(.secondary)

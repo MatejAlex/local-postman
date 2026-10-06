@@ -73,9 +73,11 @@ struct CodeTextView: NSViewRepresentable {
             let selection = view.selectedRanges
             view.string = text
             let length = (text as NSString).length
-            view.selectedRanges = selection.compactMap { value in
+            // Clamped rather than dropped: setSelectedRanges: throws on an empty array.
+            view.selectedRanges = selection.map { value in
                 let range = value.rangeValue
-                return range.location <= length ? NSValue(range: NSRange(location: range.location, length: min(range.length, length - range.location))) : nil
+                let location = min(range.location, length)
+                return NSValue(range: NSRange(location: location, length: min(range.length, length - location)))
             }
             coordinator.language = language
             coordinator.highlightNow()
@@ -121,7 +123,7 @@ struct CodeTextView: NSViewRepresentable {
             parent.text = textView.string
             // Re-colour after typing pauses, not on every keystroke.
             pending?.cancel()
-            let work = DispatchWorkItem { [weak self] in self?.highlightNow() }
+            let work = DispatchWorkItem { [weak self] in MainActor.assumeIsolated { self?.highlightNow() } }
             pending = work
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: work)
         }
