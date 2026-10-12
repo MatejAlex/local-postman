@@ -5,6 +5,10 @@ struct SidebarView: View {
     @Environment(AppModel.self) private var model
     /// Collapsed rather than expanded, so a new collection arrives open.
     @AppStorage("collapsedCollections") private var collapsedStore = ""
+    /// The window opens with the sidebar focused. Otherwise AppKit hands focus to
+    /// the first text field it finds, the request name, and the first stray
+    /// keystroke renames the request.
+    @FocusState private var listFocused: Bool
 
     var body: some View {
         @Bindable var model = model
@@ -41,6 +45,10 @@ struct SidebarView: View {
             .onMove { model.moveGroups(from: $0, to: $1) }
         }
         .listStyle(.sidebar)
+        .focused($listFocused)
+        // defaultFocus alone loses to AppKit's initial key view; claim it once the
+        // window has made its own choice.
+        .onAppear { DispatchQueue.main.async { listFocused = true } }
         .overlay {
             if model.groups.isEmpty {
                 ContentUnavailableView("No Collections", systemImage: "folder", description: Text("Create one to start adding requests."))
