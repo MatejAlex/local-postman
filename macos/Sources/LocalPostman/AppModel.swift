@@ -24,7 +24,10 @@ final class AppModel {
     var history: [HistoryItem] = []
     var loadProblems: [String] = []
 
-    var selection: String?
+    /// Remembered across launches, so the app reopens on the request you left.
+    var selection: String? = UserDefaults.standard.string(forKey: "selectedRequest") {
+        didSet { UserDefaults.standard.set(selection, forKey: "selectedRequest") }
+    }
     /// The last response of each request, kept for the session, so switching
     /// between requests does not throw away what came back.
     var responses: [String: ResponseEntry] = [:]

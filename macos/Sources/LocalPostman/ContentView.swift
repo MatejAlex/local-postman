@@ -125,6 +125,8 @@ struct RequestWorkspace: View {
     @Environment(AppModel.self) private var model
     @Binding var request: ApiRequest
     let group: RequestGroup?
+    @AppStorage("splitFraction.stacked") private var stackFraction = 0.45
+    @AppStorage("splitFraction.sideBySide") private var sideFraction = 0.5
 
     var body: some View {
         let response = ResponseView(
@@ -138,18 +140,16 @@ struct RequestWorkspace: View {
             if model.responseMaximized {
                 response
             } else if model.sideBySide {
-                HSplitView {
+                PaneSplit(axis: .horizontal, fraction: $sideFraction, minFirst: 380, minSecond: 360) {
                     RequestEditorView(request: $request, group: group)
-                        .frame(minWidth: 380, maxWidth: .infinity, maxHeight: .infinity)
+                } second: {
                     response
-                        .frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
                 }
             } else {
-                VSplitView {
+                PaneSplit(axis: .vertical, fraction: $stackFraction, minFirst: 220, minSecond: 180) {
                     RequestEditorView(request: $request, group: group)
-                        .frame(minHeight: 220, maxHeight: .infinity)
+                } second: {
                     response
-                        .frame(minHeight: 180, maxHeight: .infinity)
                 }
             }
         }
