@@ -26,7 +26,7 @@ struct SidebarView: View {
             }
 
             ForEach(model.groups) { group in
-                DisclosureGroup(isExpanded: expanded(group.id)) {
+                Section(isExpanded: expanded(group.id)) {
                     ForEach(group.requests) { request in
                         RequestRow(request: request, isSending: model.isSending(request.id))
                             .tag(request.id)
@@ -37,7 +37,7 @@ struct SidebarView: View {
                     if group.requests.isEmpty {
                         EmptyCollectionRow(groupID: group.id)
                     }
-                } label: {
+                } header: {
                     CollectionRow(group: group)
                         .contextMenu { collectionMenu(group) }
                 }
