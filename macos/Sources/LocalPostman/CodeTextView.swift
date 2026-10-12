@@ -1,4 +1,5 @@
 import AppKit
+import PostmanCore
 import SwiftUI
 
 enum CodeLanguage {
@@ -67,7 +68,10 @@ struct CodeTextView: NSViewRepresentable {
             setWrapping(wraps, view: view, scroll: scroll)
         }
 
-        if force || view.string != text {
+        // NSString equality: a literal compare, not Swift's normalising one,
+        // which on a large body cost more than the keystroke that caused it.
+        let isEcho = coordinator.pushed.map { sameBytes($0, text) } ?? false
+        if force || (!isEcho && !(view.string as NSString).isEqual(to: text)) {
             // Keep the caret where it was when the text is replaced from outside
             // (Beautify, switching requests) rather than jumping to the end.
             let selection = view.selectedRanges
@@ -118,17 +122,59 @@ struct CodeTextView: NSViewRepresentable {
             self.parent = parent
         }
 
+        /// The text this view last handed to SwiftUI, so the update that echoes it
+        /// back can be recognised with a memory compare instead of a string one.
+        var pushed: String?
+        /// What changed since the last colouring, in the text's current coordinates.
+        private var dirty: NSRange?
+
+        func textView(_ textView: NSTextView, shouldChangeTextIn range: NSRange, replacementString text: String?) -> Bool {
+            let inserted = NSRange(location: range.location, length: (text as NSString?)?.length ?? 0)
+            if var known = dirty {
+                // Shift what was already dirty past the edit, then take the union.
+                if known.location > range.location { known.location += inserted.length - range.length }
+                dirty = NSUnionRange(known, inserted)
+            } else {
+                dirty = inserted
+            }
+            return true
+        }
+
         func textDidChange(_ notification: Notification) {
             guard let textView else { return }
-            parent.text = textView.string
+            // Copied out in bulk as a native string. Left bridged, every compare
+            // and hash downstream walks the text storage a character at a time.
+            let storage = textView.string as NSString
+            var units = [unichar](repeating: 0, count: storage.length)
+            storage.getCharacters(&units, range: NSRange(location: 0, length: storage.length))
+            let text = String(decoding: units, as: UTF16.self)
+            pushed = text
+            parent.text = text
             // Re-colour after typing pauses, not on every keystroke.
             pending?.cancel()
-            let work = DispatchWorkItem { [weak self] in MainActor.assumeIsolated { self?.highlightNow() } }
+            let work = DispatchWorkItem { [weak self] in MainActor.assumeIsolated { self?.highlightEdited() } }
             pending = work
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: work)
         }
 
+        /// A large body is re-coloured around the edit only; colouring all of it
+        /// takes long enough to stall typing after every pause. JSON strings
+        /// cannot span lines, so the edited lines are enough for it.
+        private func highlightEdited() {
+            defer { dirty = nil }
+            guard let storage = textView?.textStorage else { return }
+            guard storage.length > SyntaxHighlighter.incrementalAbove, let dirty else {
+                highlightNow()
+                return
+            }
+            let text = storage.string as NSString
+            let clamped = NSIntersectionRange(dirty, NSRange(location: 0, length: text.length))
+            let lines = text.paragraphRange(for: NSRange(location: clamped.location, length: clamped.length))
+            SyntaxHighlighter.apply(language, to: storage, in: lines)
+        }
+
         func highlightNow() {
+            dirty = nil
             guard let storage = textView?.textStorage else { return }
             SyntaxHighlighter.apply(language, to: storage)
         }
@@ -156,18 +202,21 @@ enum SyntaxHighlighter {
     static let attribute = NSColor.systemTeal
     static let comment = NSColor.tertiaryLabelColor
 
-    static func apply(_ language: CodeLanguage, to storage: NSTextStorage) {
-        let full = NSRange(location: 0, length: storage.length)
+    /// Above this many characters an edit re-colours only the lines it touched.
+    static let incrementalAbove = 100_000
+
+    static func apply(_ language: CodeLanguage, to storage: NSTextStorage, in range: NSRange? = nil) {
+        let range = range ?? NSRange(location: 0, length: storage.length)
         storage.beginEditing()
         defer { storage.endEditing() }
-        storage.setAttributes(CodeStyle.baseAttributes, range: full)
+        storage.setAttributes(CodeStyle.baseAttributes, range: range)
         guard storage.length <= limit else { return }
 
         let text = storage.string as NSString
         switch language {
         case .plain: return
-        case .json: json(text, storage)
-        case .markup: markup(text, storage)
+        case .json: json(text, storage, range)
+        case .markup: markup(text, storage, range)
         }
     }
 
@@ -175,9 +224,9 @@ enum SyntaxHighlighter {
         storage.addAttribute(.foregroundColor, value: color, range: NSRange(location: location, length: length))
     }
 
-    private static func json(_ text: NSString, _ storage: NSTextStorage) {
-        let n = text.length
-        var i = 0
+    private static func json(_ text: NSString, _ storage: NSTextStorage, _ range: NSRange) {
+        let n = NSMaxRange(range)
+        var i = range.location
         while i < n {
             let c = text.character(at: i)
             switch c {
@@ -216,9 +265,9 @@ enum SyntaxHighlighter {
         }
     }
 
-    private static func markup(_ text: NSString, _ storage: NSTextStorage) {
-        let n = text.length
-        var i = 0
+    private static func markup(_ text: NSString, _ storage: NSTextStorage, _ range: NSRange) {
+        let n = NSMaxRange(range)
+        var i = range.location
         while i < n {
             guard text.character(at: i) == 0x3C else { i += 1; continue } // <
             if text.length - i >= 4, text.substring(with: NSRange(location: i, length: 4)) == "<!--" {

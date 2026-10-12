@@ -133,6 +133,19 @@ public struct ApiRequest: Codable, Hashable, Identifiable, Sendable {
 
     public static func newHTTP() -> ApiRequest { ApiRequest() }
 
+    /// Equal when every field is, with the body compared byte for byte.
+    ///
+    /// The synthesised == compares strings by Unicode canonical equivalence,
+    /// which normalises both sides; on a megabyte body coming out of a text view
+    /// that is tens of milliseconds per keystroke. Bytes are also the better
+    /// question here: they are what gets sent.
+    public static func == (a: ApiRequest, b: ApiRequest) -> Bool {
+        a.id == b.id && a.name == b.name && a.method == b.method && a.url == b.url
+            && a.params == b.params && a.headers == b.headers && a.bodyType == b.bodyType
+            && a.auth == b.auth && a.kind == b.kind && a.mcp == b.mcp
+            && sameBytes(a.body, b.body)
+    }
+
     public static func newMCP() -> ApiRequest {
         // The transport is always a POST; only the body differs from an HTTP request.
         ApiRequest(name: "New MCP Request", method: .POST, kind: .mcp, mcp: McpConfig())
@@ -344,4 +357,11 @@ extension Array {
         next.insert(item, at: to)
         return next
     }
+}
+
+/// Byte equality of two strings: a stricter test than ==, and without its
+/// Unicode normalisation, so it costs a memory compare on large text.
+public func sameBytes(_ a: String, _ b: String) -> Bool {
+    var a = a, b = b
+    return a.withUTF8 { x in b.withUTF8 { y in x.count == y.count && (x.count == 0 || memcmp(x.baseAddress!, y.baseAddress!, x.count) == 0) } }
 }

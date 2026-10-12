@@ -189,6 +189,9 @@ struct ResolvedURLLine: View {
 
 struct BodyPanel: View {
     @Binding var request: ApiRequest
+    /// Checked after typing pauses and off the main thread: parsing a large body
+    /// on every keystroke was most of the cost of typing into it.
+    @State private var invalidJSON = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -205,7 +208,7 @@ struct BodyPanel: View {
                 Spacer()
 
                 if request.bodyType == .json {
-                    if !request.body.isEmpty && JSONValue.parse(request.body) == nil {
+                    if invalidJSON {
                         Label("Not valid JSON", systemImage: "exclamationmark.triangle.fill")
                             .font(.caption)
                             .foregroundStyle(.orange)
@@ -216,6 +219,14 @@ struct BodyPanel: View {
             }
             .padding(.horizontal, 18)
             .padding(.top, 12)
+            .task(id: JSONCheck(body: request.body, isJSON: request.bodyType == .json)) {
+                let body = request.body
+                guard request.bodyType == .json, !body.isEmpty else { invalidJSON = false; return }
+                try? await Task.sleep(for: .milliseconds(300))
+                guard !Task.isCancelled else { return }
+                let invalid = await Task.detached(priority: .utility) { JSONValue.parse(body) == nil }.value
+                if !Task.isCancelled { invalidJSON = invalid }
+            }
 
             if request.bodyType == .none {
                 Text("This request has no body.")
@@ -236,6 +247,14 @@ struct BodyPanel: View {
             }
         }
     }
+}
+
+/// The task key for the JSON check. Equality is by bytes, the same cheap test
+/// ApiRequest uses, so a keystroke is not also a normalising string compare.
+private struct JSONCheck: Equatable {
+    let body: String
+    let isJSON: Bool
+    static func == (a: JSONCheck, b: JSONCheck) -> Bool { a.isJSON == b.isJSON && sameBytes(a.body, b.body) }
 }
 
 struct RequestAuthPanel: View {
