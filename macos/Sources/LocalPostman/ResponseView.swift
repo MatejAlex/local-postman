@@ -123,22 +123,72 @@ private struct LoadedResponse: View {
         }
     }
 
+    /// One row when it fits; in a narrow pane (side by side) the view controls
+    /// drop to a second row rather than squeezing the status into nothing.
     private var statusBar: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) {
+                metrics
+                Spacer(minLength: 8)
+                controls()
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 12) {
+                    metrics
+                    Spacer(minLength: 0)
+                }
+                HStack(spacing: 12) {
+                    controls()
+                    Spacer(minLength: 0)
+                }
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 12) {
+                    metrics
+                    Spacer(minLength: 0)
+                }
+                HStack(spacing: 12) {
+                    controls(compact: true)
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+        .buttonStyle(.borderless)
+        .font(.callout)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+    }
+
+    private var metrics: some View {
         HStack(spacing: 12) {
             StatusPill(status: response.status, text: "\(response.status) \(response.statusText)".trimmingCharacters(in: .whitespaces))
             Label(formatTime(response.timeMs), systemImage: "clock")
                 .foregroundStyle(.secondary)
             Label(formatSize(response.sizeBytes), systemImage: "doc")
                 .foregroundStyle(.secondary)
+        }
+        .lineLimit(1)
+        .fixedSize()
+    }
 
-            Spacer(minLength: 8)
+    private var viewPicker: some View {
+        Picker("View", selection: $tab) {
+            ForEach(tabs) { tab in
+                Text(tab == .headers ? "Headers \(response.headers.count)" : tab.rawValue.capitalized).tag(tab)
+            }
+        }
+    }
 
-            Picker("View", selection: $tab) {
-                ForEach(tabs) { tab in
-                    Text(tab == .headers ? "Headers \(response.headers.count)" : tab.rawValue.capitalized).tag(tab)
+    /// `compact` swaps the segmented tabs for a pop-up, for panes too narrow for both.
+    private func controls(compact: Bool = false) -> some View {
+        HStack(spacing: 12) {
+            Group {
+                if compact {
+                    viewPicker.pickerStyle(.menu)
+                } else {
+                    viewPicker.pickerStyle(.segmented)
                 }
             }
-            .pickerStyle(.segmented)
             .labelsHidden()
             .fixedSize()
 
@@ -170,10 +220,7 @@ private struct LoadedResponse: View {
                 .help(isMaximized ? "Restore the editor (⇧⌘↩)" : "Give the response the whole pane (⇧⌘↩)")
             }
         }
-        .buttonStyle(.borderless)
-        .font(.callout)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
+        .fixedSize()
     }
 
     @ViewBuilder
