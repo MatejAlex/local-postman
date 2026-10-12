@@ -93,8 +93,12 @@ struct HistoryRow: View {
                     Button { model.replay(item) } label: { Image(systemName: "arrow.clockwise") }
                         .help("Send again")
                 } else {
-                    TimelineView(.periodic(from: .now, by: 30)) { _ in
-                        Text(item.date, format: .relative(presentation: .numeric, unitsStyle: .narrow))
+                    TimelineView(.periodic(from: .now, by: 30)) { context in
+                        // The relative format reads "in 0 sec" for a send that just
+                        // finished, its timestamp being a hair ahead of the clock.
+                        Text(context.date.timeIntervalSince(item.date) < 60
+                             ? "just now"
+                             : item.date.formatted(.relative(presentation: .numeric, unitsStyle: .narrow)))
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                     }

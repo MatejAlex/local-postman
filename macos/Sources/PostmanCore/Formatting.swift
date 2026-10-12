@@ -88,13 +88,49 @@ public func prettyJSON(_ text: String) -> String {
         return nil
     }
 
+    func hexValue(at index: Int) -> UInt32? {
+        guard index + 4 <= scalars.count else { return nil }
+        var value: UInt32 = 0
+        for k in index..<(index + 4) {
+            guard scalars[k].isASCII, let digit = UInt32(String(scalars[k]), radix: 16) else { return nil }
+            value = value * 16 + digit
+        }
+        return value
+    }
+
+    /// `\u0159` comes out as `ř`, as JSON.stringify(JSON.parse()) does in the web
+    /// app. Control characters, quotes and backslashes stay escaped, because the
+    /// result has to remain valid JSON; a lone surrogate is left as it was.
+    func decodedEscape(at index: Int) -> (Unicode.Scalar, Int)? {
+        guard let unit = hexValue(at: index + 2) else { return nil }
+        if (0xD800...0xDBFF).contains(unit) {
+            guard index + 7 < scalars.count,
+                  scalars[index + 6] == "\\", scalars[index + 7] == "u",
+                  let low = hexValue(at: index + 8), (0xDC00...0xDFFF).contains(low),
+                  let scalar = Unicode.Scalar(0x10000 + ((unit - 0xD800) << 10) + (low - 0xDC00))
+            else { return nil }
+            return (scalar, 12)
+        }
+        guard unit >= 0x20, unit != 0x22, unit != 0x5C, let scalar = Unicode.Scalar(unit) else { return nil }
+        return (scalar, 6)
+    }
+
     while i < scalars.count {
         let c = scalars[i]
         if inString {
+            if escaped {
+                escaped = false
+            } else if c == "\\" {
+                if i + 1 < scalars.count, scalars[i + 1] == "u", let (scalar, length) = decodedEscape(at: i) {
+                    out.append(scalar)
+                    i += length
+                    continue
+                }
+                escaped = true
+            } else if c == "\"" {
+                inString = false
+            }
             out.append(c)
-            if escaped { escaped = false }
-            else if c == "\\" { escaped = true }
-            else if c == "\"" { inString = false }
             i += 1
             continue
         }

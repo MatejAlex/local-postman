@@ -26,6 +26,18 @@ import Testing
         #expect(prettyJSON("plain text") == "plain text")
     }
 
+    @Test func decodesUnicodeEscapesLikeJSONParse() {
+        let input = #"{"cz":"P\u0159\u00edli\u0161","emoji":"\ud83d\ude00","keep":"\u0022 \u005c \u0001"}"#
+        let expected = #"""
+        {
+          "cz": "Příliš",
+          "emoji": "😀",
+          "keep": "\u0022 \u005c \u0001"
+        }
+        """#
+        #expect(prettyJSON(input) == expected)
+    }
+
     @Test func reindentsAlreadyPrettyJSON() {
         #expect(prettyJSON("{\n    \"a\" :   [ ]\n}") == "{\n  \"a\": []\n}")
     }
