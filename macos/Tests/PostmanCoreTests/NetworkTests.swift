@@ -172,3 +172,14 @@ func bodyJSON(_ request: WireRequest) -> JSONValue? {
         #expect(response.sizeBytes > 0)
     }
 }
+
+@Suite struct ServerTrustTests {
+    @Test func acceptsOnlyTheValidityPeriodFailure() {
+        #expect(failsOnlyOnValidityPeriod([validityPeriodTooLongStatus]))
+        #expect(failsOnlyOnValidityPeriod([validityPeriodTooLongStatus, validityPeriodTooLongStatus]))
+        // An untrusted anchor or a hostname mismatch alongside it: still rejected.
+        #expect(!failsOnlyOnValidityPeriod([validityPeriodTooLongStatus, -2147408896]))
+        #expect(!failsOnlyOnValidityPeriod([-2147409622]))
+        #expect(!failsOnlyOnValidityPeriod([]))
+    }
+}

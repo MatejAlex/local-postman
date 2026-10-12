@@ -107,6 +107,38 @@ public final class URLSessionTransport: NSObject, HTTPTransport, URLSessionTaskD
     ) {
         completionHandler(nil)
     }
+
+    #if canImport(Security)
+    public func urlSession(
+        _ session: URLSession,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping @Sendable (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+              let trust = challenge.protectionSpace.serverTrust,
+              !SecTrustEvaluateWithError(trust, nil),
+              let result = SecTrustCopyResult(trust) as? [String: Any],
+              let details = result["TrustResultDetails"] as? [[String: Any]],
+              failsOnlyOnValidityPeriod(details.flatMap { $0["StatusCodes"] as? [Int] ?? [] })
+        else {
+            completionHandler(.performDefaultHandling, nil)
+            return
+        }
+        completionHandler(.useCredential, URLCredential(trust: trust))
+    }
+    #endif
+}
+
+/// The status Apple's TLS check reports for a server certificate valid for more
+/// than 825 days. It applies even to a private CA, where internal certificates
+/// are routinely issued for years; node, and so the web app, never enforced it.
+public let validityPeriodTooLongStatus = -2147409651
+
+/// Whether a failed trust evaluation failed on nothing but the validity-period
+/// rule. The chain, its anchor and the hostname are all still checked: any of
+/// those failing adds its own status, and the certificate is rejected.
+public func failsOnlyOnValidityPeriod(_ statusCodes: [Int]) -> Bool {
+    !statusCodes.isEmpty && statusCodes.allSatisfy { $0 == validityPeriodTooLongStatus }
 }
 
 private final class TaskBox: @unchecked Sendable {
