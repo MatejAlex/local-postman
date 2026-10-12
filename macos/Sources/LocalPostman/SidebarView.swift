@@ -26,19 +26,24 @@ struct SidebarView: View {
             }
 
             ForEach(model.groups) { group in
-                Section(isExpanded: expanded(group.id)) {
-                    ForEach(group.requests) { request in
-                        RequestRow(request: request, isSending: model.isSending(request.id))
-                            .tag(request.id)
-                            .contextMenu { requestMenu(request) }
-                    }
-                    .onMove { model.moveRequests(in: group.id, from: $0, to: $1) }
+                // Not Section(isExpanded:): its system chevron appears on hover and
+                // takes width from the header, shifting the gear under the pointer.
+                let isExpanded = expanded(group.id)
+                Section {
+                    if isExpanded.wrappedValue {
+                        ForEach(group.requests) { request in
+                            RequestRow(request: request, isSending: model.isSending(request.id))
+                                .tag(request.id)
+                                .contextMenu { requestMenu(request) }
+                        }
+                        .onMove { model.moveRequests(in: group.id, from: $0, to: $1) }
 
-                    if group.requests.isEmpty {
-                        EmptyCollectionRow(groupID: group.id)
+                        if group.requests.isEmpty {
+                            EmptyCollectionRow(groupID: group.id)
+                        }
                     }
                 } header: {
-                    CollectionRow(group: group)
+                    CollectionRow(group: group, isExpanded: isExpanded)
                         .contextMenu { collectionMenu(group) }
                 }
             }
@@ -150,6 +155,7 @@ struct EmptyCollectionRow: View {
 struct CollectionRow: View {
     @Environment(AppModel.self) private var model
     let group: RequestGroup
+    @Binding var isExpanded: Bool
 
     @State private var hovering = false
     @State private var renaming = false
@@ -200,6 +206,18 @@ struct CollectionRow: View {
             Text("\(group.requests.count)")
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.secondary)
+
+            // Always laid out, only shown on hover, so nothing to its left moves.
+            Button { withAnimation(.snappy) { isExpanded.toggle() } } label: {
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                    .frame(width: 16, height: 16)
+                    .contentShape(Rectangle())
+            }
+            .opacity(hovering || !isExpanded ? 1 : 0)
+            .help(isExpanded ? "Collapse" : "Expand")
         }
         .buttonStyle(.borderless)
         .contentShape(Rectangle())
