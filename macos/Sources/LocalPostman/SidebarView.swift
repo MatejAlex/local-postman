@@ -34,7 +34,6 @@ struct SidebarView: View {
                         ForEach(group.requests) { request in
                             RequestRow(request: request, isSending: model.isSending(request.id))
                                 .tag(request.id)
-                                .contextMenu { requestMenu(request) }
                         }
                         .onMove { model.moveRequests(in: group.id, from: $0, to: $1) }
 
@@ -50,6 +49,15 @@ struct SidebarView: View {
             .onMove { model.moveGroups(from: $0, to: $1) }
         }
         .listStyle(.sidebar)
+        // The primary action is the double-click. A tap gesture on the row loses
+        // to the table's own click handling.
+        .contextMenu(forSelectionType: String.self) { ids in
+            if ids.count == 1, let id = ids.first, let request = model.binding(forRequest: id)?.wrappedValue {
+                requestMenu(request)
+            }
+        } primaryAction: { ids in
+            if ids.count == 1 { model.renamingRequest = ids.first }
+        }
         .focused($listFocused)
         // defaultFocus alone loses to AppKit's initial key view; claim it once the
         // window has made its own choice.
@@ -95,6 +103,7 @@ struct SidebarView: View {
             model.selection = request.id
             model.send(request)
         }
+        Button("Rename") { model.renamingRequest = request.id }
         Button("Duplicate") { model.duplicate(request.id) }
         Divider()
         Button("Delete", role: .destructive) { model.deleteRequest(request.id) }
@@ -117,21 +126,47 @@ struct SidebarView: View {
 }
 
 struct RequestRow: View {
+    @Environment(AppModel.self) private var model
     let request: ApiRequest
     let isSending: Bool
+
+    @State private var draftName = ""
+    @FocusState private var nameFocused: Bool
+
+    private var renaming: Bool { model.renamingRequest == request.id }
 
     var body: some View {
         HStack(spacing: 6) {
             MethodBadge(badge: request.badge)
-            Text(request.name)
-                .lineLimit(1)
-                .truncationMode(.tail)
+            if renaming {
+                TextField("Name", text: $draftName)
+                    .textFieldStyle(.plain)
+                    .focused($nameFocused)
+                    .onSubmit(commitRename)
+                    .onExitCommand { model.renamingRequest = nil }
+                    .onChange(of: nameFocused) { _, focused in if !focused { commitRename() } }
+                    .onAppear {
+                        draftName = request.name
+                        // The field does not exist until this update lands; focus it on the next.
+                        DispatchQueue.main.async { nameFocused = true }
+                    }
+            } else {
+                Text(request.name)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
             Spacer(minLength: 0)
             if isSending {
                 ProgressView().controlSize(.mini)
             }
         }
         .help(request.url)
+    }
+
+    private func commitRename() {
+        guard renaming else { return }
+        model.renamingRequest = nil
+        model.renameRequest(request.id, to: draftName)
     }
 }
 

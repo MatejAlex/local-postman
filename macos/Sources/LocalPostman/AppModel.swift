@@ -43,6 +43,8 @@ final class AppModel {
     var editingCollection: GroupRef?
     var pendingDelete: GroupRef?
     var focusURLTick = 0
+    /// The sidebar row being renamed in place, set by double-click or Rename.
+    var renamingRequest: String?
 
     @ObservationIgnored let storage: Storage
     @ObservationIgnored private let sender = Sender()
@@ -206,6 +208,14 @@ final class AppModel {
         groups.append(group)
         saveNow(group.id)
         editingCollection = GroupRef(id: group.id)
+    }
+
+    func renameRequest(_ id: String, to name: String) {
+        guard var request = groups.lazy.flatMap(\.requests).first(where: { $0.id == id }) else { return }
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        request.name = trimmed
+        update(request)
     }
 
     func renameGroup(_ id: String, to name: String) {
