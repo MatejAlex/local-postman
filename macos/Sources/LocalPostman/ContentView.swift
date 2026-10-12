@@ -110,6 +110,7 @@ struct DetailView: View {
                 if model.groups.isEmpty {
                     Button("New Collection") { model.addGroup() }
                         .buttonStyle(.glassProminent)
+                        .tint(Palette.accent)
                 } else {
                     Button("New Request") { model.addRequestToCurrentCollection(kind: .http) }
                         .buttonStyle(.glass)

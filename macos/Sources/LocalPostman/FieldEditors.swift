@@ -20,12 +20,8 @@ struct KeyValueEditor: View {
                         .toggleStyle(.checkbox)
                         .labelsHidden()
                         .opacity(isBlank ? 0.3 : 1)
-                    TextField(keyPlaceholder, text: field(index, \.key))
-                        .textFieldStyle(.roundedBorder)
-                        .font(smallMonoFont)
-                    TextField(valuePlaceholder, text: field(index, \.value))
-                        .textFieldStyle(.roundedBorder)
-                        .font(smallMonoFont)
+                    PlainField(placeholder: keyPlaceholder, text: field(index, \.key))
+                    PlainField(placeholder: valuePlaceholder, text: field(index, \.value))
                     Button {
                         remove(index)
                     } label: {
@@ -78,21 +74,20 @@ struct BasicAuthFields: View {
             Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 8) {
                 GridRow {
                     Text("Username").foregroundStyle(.secondary).gridColumnAlignment(.trailing)
-                    TextField("user or {{db_user}}", text: $basic.username)
-                        .textFieldStyle(.roundedBorder)
-                        .font(smallMonoFont)
-                        .autocorrectionDisabled()
+                    PlainField(placeholder: "user or {{db_user}}", text: $basic.username)
                 }
                 GridRow {
                     Text("Password").foregroundStyle(.secondary)
                     HStack {
                         Group {
                             if reveal {
-                                TextField("password or {{db_password}}", text: $basic.password)
+                                TextField("Password", text: $basic.password, prompt: Text("password or {{db_password}}"))
                             } else {
-                                SecureField("password or {{db_password}}", text: $basic.password)
+                                SecureField("Password", text: $basic.password, prompt: Text("password or {{db_password}}"))
                             }
                         }
+                        .labelsHidden()
+                        .multilineTextAlignment(.leading)
                         .textFieldStyle(.roundedBorder)
                         .font(smallMonoFont)
                         .autocorrectionDisabled()
@@ -132,5 +127,22 @@ struct BasicAuthFields: View {
                     .background(.background.secondary, in: .rect(cornerRadius: 8))
             }
         }
+    }
+}
+
+/// A monospaced, left-aligned text field whose placeholder is only a prompt.
+/// Inside a grouped Form a plain TextField shows its title as a label and
+/// right-aligns its text, which turned the variables table into a mess.
+struct PlainField: View {
+    let placeholder: String
+    @Binding var text: String
+
+    var body: some View {
+        TextField(placeholder, text: $text, prompt: Text(placeholder))
+            .labelsHidden()
+            .multilineTextAlignment(.leading)
+            .textFieldStyle(.roundedBorder)
+            .font(smallMonoFont)
+            .autocorrectionDisabled()
     }
 }

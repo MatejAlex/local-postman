@@ -83,6 +83,7 @@ struct CollectionSettingsView: View {
                     dismiss()
                 }
                 .buttonStyle(.glassProminent)
+                .tint(Palette.accent)
                 .keyboardShortcut(.defaultAction)
             }
             .padding(16)
