@@ -202,11 +202,11 @@ func message(for error: Error) -> String {
     if let error = error as? URLError {
         switch error.code {
         case .timedOut: return SendError.timedOut.errorDescription!
-        case .cancelled: return "Request cancelled"
+        case .cancelled: return ApiResponse.cancelledMessage
         default: break
         }
     }
-    if error is CancellationError { return "Request cancelled" }
+    if error is CancellationError { return ApiResponse.cancelledMessage }
     return error.localizedDescription
 }
 

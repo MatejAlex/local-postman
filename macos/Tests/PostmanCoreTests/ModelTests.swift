@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import PostmanCore
 
@@ -34,5 +35,16 @@ import Testing
         let big = String(repeating: "příliš žluťoučký kůň ", count: 50_000)
         #expect(sameBytes(big, big + ""))
         #expect(!sameBytes(big, big + "x"))
+    }
+}
+
+@Suite struct CancelledResponseTests {
+    @Test func cancellationIsRecognisedAndOtherFailuresAreNot() {
+        #expect(ApiResponse.failure(message(for: CancellationError())).isCancelled)
+        #expect(ApiResponse.failure(message(for: URLError(.cancelled))).isCancelled)
+        #expect(!ApiResponse.failure(message(for: URLError(.timedOut))).isCancelled)
+        #expect(!ApiResponse.failure("Could not connect to the server.").isCancelled)
+        // A server that happens to answer with that text is still an answer.
+        #expect(!ApiResponse(status: 499, error: ApiResponse.cancelledMessage).isCancelled)
     }
 }

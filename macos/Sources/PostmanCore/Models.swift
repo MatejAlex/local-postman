@@ -266,6 +266,12 @@ public struct ApiResponse: Codable, Hashable, Sendable {
     /// this app rejected before sending. The viewer shows only the message then.
     public var isBareFailure: Bool { error != nil && status == 0 }
 
+    /// The user stopped it. Not a failure: nothing went wrong, so the viewer
+    /// shows it plainly rather than in red.
+    public var isCancelled: Bool { status == 0 && error == ApiResponse.cancelledMessage }
+
+    public static let cancelledMessage = "Request cancelled"
+
     public static func failure(_ message: String, timeMs: Double = 0) -> ApiResponse {
         ApiResponse(status: 0, timeMs: timeMs, error: message)
     }

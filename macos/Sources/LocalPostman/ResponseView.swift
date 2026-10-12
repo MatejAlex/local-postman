@@ -23,7 +23,13 @@ struct ResponseView: View {
                 ProgressView("Sending…")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let entry {
-                if entry.response.isBareFailure {
+                if entry.response.isCancelled {
+                    ContentUnavailableView(
+                        "Cancelled",
+                        systemImage: "stop.circle",
+                        description: Text("Send the request again with ⌘↩.")
+                    )
+                } else if entry.response.isBareFailure {
                     BareFailure(message: entry.response.error ?? "Request failed")
                 } else {
                     // Keyed by the entry, so each new response opens on its own default tab.
