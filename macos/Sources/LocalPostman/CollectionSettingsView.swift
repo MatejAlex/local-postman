@@ -48,7 +48,7 @@ struct CollectionSettingsView: View {
                 Section {
                     KeyValueEditor(rows: $draft.variablesValue, keyPlaceholder: "token", valuePlaceholder: "value")
                 } header: {
-                    Text("Variables — reference with {{key}}")
+                    Text("Variables: reference with {{key}}")
                 } footer: {
                     Text("Available to every request in this collection, in the URL, params, headers, body and MCP arguments. A collection is the only place a variable can come from. Variables are stored in the collection file, so blank tokens before sharing it.")
                 }

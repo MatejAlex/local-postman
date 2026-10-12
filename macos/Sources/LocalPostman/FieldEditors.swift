@@ -122,7 +122,7 @@ struct BasicAuthFields: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Header sent").font(.caption).foregroundStyle(.secondary)
                 Text(header == nil
-                     ? "None — fill in a username or password."
+                     ? "None. Fill in a username or password."
                      : reveal ? "Authorization: \(header!)" : "Authorization: Basic ••••••••  (Show to reveal)")
                     .font(.system(.caption, design: .monospaced))
                     .foregroundStyle(.secondary)

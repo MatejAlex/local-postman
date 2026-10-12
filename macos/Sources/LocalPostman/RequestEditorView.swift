@@ -171,7 +171,7 @@ struct ResolvedURLLine: View {
         let resolved = buildURL(url, params: params, vars: vars)
         let missing = undefinedVariables(in: url, vars)
         if !missing.isEmpty {
-            Text("Undefined: " + missing.map { "{{\($0)}}" }.joined(separator: ", ") + " — sent as typed. Define it in the collection's settings.")
+            Text("Undefined: " + missing.map { "{{\($0)}}" }.joined(separator: ", ") + ", sent as typed. Define it in the collection's settings.")
                 .font(.caption)
                 .foregroundStyle(.orange)
                 .lineLimit(1)

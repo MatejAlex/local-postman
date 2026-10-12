@@ -161,6 +161,7 @@ struct HistoryDetailView: View {
                     model.replay(item) { replayed in
                         item = replayed
                         entry = ResponseEntry(response: replayed.response)
+                        pane = 0
                     }
                 } label: {
                     Label("Send Again", systemImage: "arrow.clockwise")
@@ -169,6 +170,7 @@ struct HistoryDetailView: View {
                 .disabled(model.replaying.contains(item.id))
                 Button("Done") { dismiss() }
                     .buttonStyle(.glassProminent)
+                    .tint(Palette.accent)
                     .keyboardShortcut(.cancelAction)
             }
             .padding(16)

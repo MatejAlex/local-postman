@@ -211,7 +211,7 @@ struct CollectionRow: View {
         if group.authValue.mode == .basic { set.append("Basic auth") }
         let count = group.activeVariableCount
         if count > 0 { set.append("\(count) variable\(count == 1 ? "" : "s")") }
-        return set.isEmpty ? "Collection settings" : "Collection settings — " + set.joined(separator: ", ")
+        return set.isEmpty ? "Collection settings" : "Collection settings: " + set.joined(separator: ", ")
     }
 
     private func startRename() {
