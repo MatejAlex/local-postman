@@ -37,6 +37,7 @@ cd macos && swift test
 | `Sources/LocalPostman/` | The SwiftUI app. `AppModel` holds all state and does all saving; the views only read it and call into it. |
 | `Tests/PostmanCoreTests/` | 51 tests covering the behaviour carried over from the web app. |
 | `scripts/build-app.sh` | Builds and installs the `.app`. |
+| `scripts/make-icon.swift` | Draws the app icon into `Resources/AppIcon.icns`; run it with `swift` after changing the design. |
 
 ## What changed from the web app
 

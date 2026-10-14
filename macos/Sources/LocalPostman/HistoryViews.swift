@@ -54,6 +54,8 @@ struct HistoryView: View {
                 }
                 .listStyle(.inset)
                 .scrollContentBackground(.hidden)
+                // A new send slides in at the top instead of the list jumping.
+                .animation(.smooth(duration: 0.25), value: model.history.first?.id)
             }
         }
         .confirmationDialog("Clear all history?", isPresented: $confirmingClear) {

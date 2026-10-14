@@ -18,34 +18,62 @@ struct ResponseView: View {
     var onToggleMaximize: (() -> Void)?
 
     var body: some View {
-        Group {
-            if isSending {
-                ProgressView("Sending…")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let entry {
-                if entry.response.isCancelled {
+        // The last response stays in place, dimmed, while the next one is on its
+        // way, so a send never blanks the pane and a fast one does not flash.
+        ZStack {
+            Group {
+                if let entry {
+                    if entry.response.isCancelled {
+                        ContentUnavailableView(
+                            "Cancelled",
+                            systemImage: "stop.circle",
+                            description: Text("Send the request again with ⌘↩.")
+                        )
+                    } else if entry.response.isBareFailure {
+                        BareFailure(message: entry.response.error ?? "Request failed")
+                    } else {
+                        // Keyed by the entry, so each new response opens on its own default tab.
+                        LoadedResponse(response: entry.response, isMaximized: isMaximized, onToggleMaximize: onToggleMaximize)
+                            .id(entry.id)
+                    }
+                } else if !isSending {
                     ContentUnavailableView(
-                        "Cancelled",
-                        systemImage: "stop.circle",
-                        description: Text("Send the request again with ⌘↩.")
+                        "No Response Yet",
+                        systemImage: "arrow.down.left.circle",
+                        description: Text("Send the request with ⌘↩ to see what comes back.")
                     )
-                } else if entry.response.isBareFailure {
-                    BareFailure(message: entry.response.error ?? "Request failed")
-                } else {
-                    // Keyed by the entry, so each new response opens on its own default tab.
-                    LoadedResponse(response: entry.response, isMaximized: isMaximized, onToggleMaximize: onToggleMaximize)
-                        .id(entry.id)
                 }
-            } else {
-                ContentUnavailableView(
-                    "No Response Yet",
-                    systemImage: "arrow.down.left.circle",
-                    description: Text("Send the request with ⌘↩ to see what comes back.")
-                )
+            }
+            .opacity(isSending ? 0.35 : 1)
+            .allowsHitTesting(!isSending)
+
+            if isSending {
+                SendingIndicator()
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.background)
+        .animation(.smooth(duration: 0.2), value: isSending)
+        .animation(.smooth(duration: 0.2), value: entry?.id)
+    }
+}
+
+/// Shown only once a send has taken a moment; a local call that answers in a
+/// few milliseconds should not flash a spinner.
+private struct SendingIndicator: View {
+    @State private var visible = false
+
+    var body: some View {
+        ProgressView("Sending…")
+            .padding(.horizontal, 22)
+            .padding(.vertical, 16)
+            .glassEffect(.regular, in: .rect(cornerRadius: 16))
+            .opacity(visible ? 1 : 0)
+            .scaleEffect(visible ? 1 : 0.96)
+            .task {
+                try? await Task.sleep(for: .milliseconds(150))
+                withAnimation(.smooth(duration: 0.2)) { visible = true }
+            }
     }
 }
 

@@ -74,11 +74,11 @@ struct AppCommands: Commands {
         }
 
         CommandGroup(after: .sidebar) {
-            Button("Toggle History") { model.showHistory.toggle() }
+            Button("Toggle History") { withAnimation(.smooth) { model.showHistory.toggle() } }
                 .keyboardShortcut("y")
             Button("Toggle Response Maximized") { model.responseMaximized.toggle() }
                 .keyboardShortcut(.return, modifiers: [.command, .shift])
-            Button("Toggle Side-by-Side Layout") { model.sideBySide.toggle() }
+            Button("Toggle Side-by-Side Layout") { withAnimation(.smooth) { model.sideBySide.toggle() } }
                 .keyboardShortcut("\\", modifiers: [.command])
             Divider()
             Picker("Appearance", selection: $appearance) {

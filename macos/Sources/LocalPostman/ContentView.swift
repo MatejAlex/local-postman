@@ -28,14 +28,14 @@ struct ContentView: View {
             .sharedBackgroundVisibility(.hidden)
             ToolbarItemGroup(placement: .primaryAction) {
                 Button {
-                    model.sideBySide.toggle()
+                    withAnimation(.smooth) { model.sideBySide.toggle() }
                 } label: {
                     Label("Layout", systemImage: model.sideBySide ? "rectangle.split.2x1" : "rectangle.split.1x2")
                 }
                 .help(model.sideBySide ? "Stack request above response (⌘\\)" : "Request and response side by side (⌘\\)")
 
                 Button {
-                    model.showHistory.toggle()
+                    withAnimation(.smooth) { model.showHistory.toggle() }
                 } label: {
                     Label("History", systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90")
                 }
