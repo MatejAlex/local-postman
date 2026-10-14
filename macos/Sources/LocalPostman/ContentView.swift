@@ -23,6 +23,9 @@ struct ContentView: View {
             ToolbarItem(placement: .navigation) {
                 CollectionIndicator(group: model.selectedGroup)
             }
+            // The indicator is its own tinted capsule; the toolbar's glass behind
+            // it drew a second pill around the first.
+            .sharedBackgroundVisibility(.hidden)
             ToolbarItemGroup(placement: .primaryAction) {
                 Button {
                     model.sideBySide.toggle()
