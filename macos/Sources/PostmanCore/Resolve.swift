@@ -118,8 +118,11 @@ public func resolveRequest(_ request: ApiRequest, group: RequestGroup?) -> Resol
     var body: String?
     if request.method != .GET, request.method != .HEAD, request.bodyType != .none {
         body = substitute(request.body, vars)
-        if request.bodyType == .json, !headers.keys.contains(where: { $0.lowercased() == "content-type" }) {
-            headers["Content-Type"] = "application/json"
+        // A raw body gets what node's fetch gave it in the web app. Left unset,
+        // URLSession labels it form-urlencoded, and ORDS then reads it as form
+        // fields and reports every JSON attribute missing.
+        if !headers.keys.contains(where: { $0.lowercased() == "content-type" }) {
+            headers["Content-Type"] = request.bodyType == .json ? "application/json" : "text/plain;charset=UTF-8"
         }
     }
 

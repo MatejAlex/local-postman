@@ -75,6 +75,14 @@ import Testing
         get.method = .GET
         #expect(resolveRequest(get, group: nil).body == nil)
     }
+
+    @Test func rawBodyIsPlainTextUnlessAHeaderSaysOtherwise() {
+        var raw = ApiRequest(method: .POST, url: "https://x.dev", body: #"{"a":1}"#, bodyType: .raw)
+        #expect(resolveRequest(raw, group: nil).headers["Content-Type"] == "text/plain;charset=UTF-8")
+
+        raw.headers = [KeyValue(key: "content-type", value: "application/xml")]
+        #expect(resolveRequest(raw, group: nil).headers == ["content-type": "application/xml"])
+    }
 }
 
 @Suite struct McpParamsTests {
