@@ -32,40 +32,64 @@ public func redactedHeader(_ name: String, _ value: String) -> String {
 public let redactedURLValue = "REDACTED"
 
 /// A URL with the password in its user info and every secret-looking query
-/// parameter blanked. The rest stays exactly as typed.
+/// parameter blanked. Done on the text rather than through URLComponents, which
+/// refuses a URL with `{{variables}}` or spaces in it and would leave it whole.
 public func redactedURL(_ url: String) -> String {
-    guard var parts = URLComponents(string: url) else { return url }
-    var changed = false
-    if parts.password != nil {
-        parts.percentEncodedPassword = redactedURLValue
-        changed = true
-    }
-    if let items = parts.percentEncodedQueryItems {
-        parts.percentEncodedQueryItems = items.map { item in
-            guard looksSecret(item.name.removingPercentEncoding ?? item.name), item.value != nil else { return item }
-            changed = true
-            return URLQueryItem(name: item.name, value: redactedURLValue)
-        }
-    }
-    return changed ? (parts.string ?? url) : url
+    var out = replacing(#"^([A-Za-z][A-Za-z0-9+.-]*://[^/?#@:]*):[^/?#@]*@"#, in: url, with: "$1:\(redactedURLValue)@")
+    guard let question = out.firstIndex(of: "?") else { return out }
+    let queryStart = out.index(after: question)
+    let queryEnd = out[queryStart...].firstIndex(of: "#") ?? out.endIndex
+    let query = out[queryStart..<queryEnd].split(separator: "&", omittingEmptySubsequences: false).map { field -> String in
+        guard let eq = field.firstIndex(of: "=") else { return String(field) }
+        let name = field[..<eq]
+        return looksSecret(decodedFormName(name)) ? "\(name)=\(redactedURLValue)" : String(field)
+    }.joined(separator: "&")
+    out.replaceSubrange(queryStart..<queryEnd, with: query)
+    return out
+}
+
+private func decodedFormName(_ name: Substring) -> String {
+    String(name).replacingOccurrences(of: "+", with: " ").removingPercentEncoding ?? String(name)
+}
+
+private func replacing(_ pattern: String, in text: String, with template: String) -> String {
+    let regex = try! NSRegularExpression(pattern: pattern)
+    return regex.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: template)
 }
 
 /// `a=1&password=x`, the shape of a form post, with its secret fields blanked.
 /// Nil when the body is not that shape.
 private func redactedForm(_ body: String) -> String? {
-    let fields = body.split(separator: "&", omittingEmptySubsequences: false)
-    guard !body.isEmpty, !body.contains(where: \.isWhitespace), fields.allSatisfy({ $0.contains("=") }) else { return nil }
+    let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
+    let fields = trimmed.split(separator: "&", omittingEmptySubsequences: false)
+    guard !trimmed.isEmpty, !trimmed.contains(where: \.isNewline), fields.allSatisfy({ $0.contains("=") }) else { return nil }
     return fields.map { field in
         let name = field.split(separator: "=", maxSplits: 1)[0]
-        let decoded = String(name).replacingOccurrences(of: "+", with: " ").removingPercentEncoding ?? String(name)
-        return looksSecret(decoded) ? "\(name)=\(redactedValue)" : String(field)
+        return looksSecret(decodedFormName(name)) ? "\(name)=\(redactedValue)" : String(field)
     }.joined(separator: "&")
 }
 
-/// A JSON or form body with every secret-looking field blanked, at any depth.
-/// Any other body comes back unchanged: there is no telling where its secrets are.
+/// The last line of defence for a body that is neither valid JSON nor a form:
+/// JSON-looking `"password": value` pairs (a body with a typo still carries the
+/// real password) and `<password>…</password>` elements.
+private func redactedLoosely(_ body: String) -> String {
+    let names = #"[^"]*(?:password|passwd|secret|token|api_?key|credential)[^"]*"#
+    var out = replacing(
+        #"(?i)("\#(names)"\s*:\s*)("(?:[^"\\]|\\.)*"|[^,}\]\s]+)"#,
+        in: body, with: "$1\"\(redactedValue)\""
+    )
+    out = replacing(
+        #"(?i)<([A-Za-z_:-]*(?:password|passwd|secret|token|apikey|api_key|credential)[A-Za-z_:-]*)>[^<]*</\1>"#,
+        in: out, with: "<$1>\(redactedValue)</$1>"
+    )
+    return out
+}
+
+/// A body with every secret-looking field blanked: by structure when it is
+/// JSON or a form, by pattern otherwise. Free text with a secret in it cannot
+/// be recognised and comes back as it is.
 public func redactedBody(_ body: String) -> String {
-    guard let value = JSONValue.parse(body) else { return redactedForm(body) ?? body }
+    guard let value = JSONValue.parse(body) else { return redactedForm(body) ?? redactedLoosely(body) }
     func scrub(_ value: JSONValue) -> JSONValue {
         switch value {
         case .object(let fields):

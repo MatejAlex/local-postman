@@ -84,3 +84,18 @@ import Testing
         #expect(curlCommand(request, hideCredentials: false).contains("abc"))
     }
 }
+
+@Suite struct FailClosedRedactionTests {
+    @Test func unparseableURLsAreStillRedacted() {
+        // URLComponents rejects both of these; the redaction must not give up.
+        #expect(redactedURL("{{base}}/login?token=abc") == "{{base}}/login?token=REDACTED")
+        #expect(redactedURL("https://me:pw@x.dev/a b?Password=x#frag") == "https://me:REDACTED@x.dev/a b?Password=REDACTED#frag")
+    }
+
+    @Test func brokenJsonAndXmlAreStillRedacted() {
+        let broken = #"{"user_name": "me" "Password": "hu\"nter2"}"#
+        #expect(redactedBody(broken) == #"{"user_name": "me" "Password": "<redacted>"}"#)
+        #expect(redactedBody("<login><user>me</user><password>pw</password></login>") == "<login><user>me</user><password><redacted></password></login>")
+        #expect(redactedBody("user=me&password=pw\n") == "user=me&password=<redacted>")
+    }
+}
