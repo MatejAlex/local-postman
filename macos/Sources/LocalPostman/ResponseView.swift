@@ -151,8 +151,10 @@ private struct LoadedResponse: View {
             // Formatting a large body is real work; do it off the main thread.
             let body = response.body
             let contentType = response.contentType
+            let isJSON = language == .json
             pretty = await Task.detached(priority: .userInitiated) {
-                prettyBody(body, contentType: contentType)
+                let pretty = prettyBody(body, contentType: contentType)
+                return isJSON ? breakingEscapedNewlines(pretty) : pretty
             }.value
         }
     }

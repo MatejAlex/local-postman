@@ -86,3 +86,14 @@ import Testing
         #expect(formatSize(2048) == "2.0 KB")
     }
 }
+
+@Suite struct EscapedNewlineTests {
+    @Test func breaksStringNewlinesForReading() {
+        #expect(breakingEscapedNewlines(#"{"text": "line 1\nline 2\r\nline 3"}"#) == "{\"text\": \"line 1\nline 2\nline 3\"}")
+    }
+
+    @Test func leavesOtherEscapesAlone() {
+        // An escaped backslash before an n is a literal backslash-n, not a newline.
+        #expect(breakingEscapedNewlines(#"{"path": "C:\\new", "q": "say \"hi\"", "t": "a\tb"}"#) == #"{"path": "C:\\new", "q": "say \"hi\"", "t": "a\tb"}"#)
+    }
+}
