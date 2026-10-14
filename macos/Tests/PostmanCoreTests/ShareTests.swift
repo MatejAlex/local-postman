@@ -39,10 +39,10 @@ import Testing
         #expect(curl.contains(#""jsonrpc":"2.0""#))
     }
 
-    @Test func redactsNestedSecretsAndLeavesNonJsonAlone() {
+    @Test func redactsNestedSecretsAndLeavesFreeTextAlone() {
         #expect(redactedBody(#"{"a":{"api_token":"t"},"list":[{"secret":1}]}"#).contains(#""api_token":"<redacted>""#))
         #expect(!redactedBody(#"{"list":[{"secret":1}]}"#).contains("1"))
-        #expect(redactedBody("password=hunter2") == "password=hunter2")
+        #expect(redactedBody("plain text, password hunter2") == "plain text, password hunter2")
         #expect(redactedBody(#"{"ok":true}"#) == #"{"ok":true}"#)
         #expect(redactedHeader("Cookie", "s=1") == "<redacted>")
         #expect(redactedHeader("Accept", "*/*") == "*/*")
@@ -60,5 +60,27 @@ import Testing
         #expect(!text.contains("xyz"))
         #expect(!text.contains("abc.def"))
         #expect(exchangeText(item, hideCredentials: false).contains("xyz"))
+    }
+}
+
+@Suite struct RedactionGapTests {
+    @Test func urlSecretsAreBlanked() {
+        #expect(redactedURL("https://me:pw@x.dev/a?token=abc&page=2&api_key=k") == "https://me:REDACTED@x.dev/a?token=REDACTED&page=2&api_key=REDACTED")
+        #expect(redactedURL("https://x.dev/a?page=2") == "https://x.dev/a?page=2")
+        #expect(redactedURL("{{base}}/login") == "{{base}}/login")
+    }
+
+    @Test func formBodySecretsAreBlanked() {
+        #expect(redactedBody("user=me&password=hunter2") == "user=me&password=<redacted>")
+        #expect(redactedBody("grant_type=client_credentials&client_secret=s") == "grant_type=client_credentials&client_secret=<redacted>")
+        #expect(redactedBody("just some text") == "just some text")
+    }
+
+    @Test func curlAndExchangeUseTheRedactedURL() {
+        let request = ResolvedRequest(url: "https://x.dev/a?access_token=abc", method: .GET, headers: [:])
+        #expect(!curlCommand(request).contains("abc"))
+        let item = HistoryItem(name: nil, method: .GET, url: request.url, resolved: request, response: ApiResponse(status: 204))
+        #expect(!exchangeText(item).contains("abc"))
+        #expect(curlCommand(request, hideCredentials: false).contains("abc"))
     }
 }

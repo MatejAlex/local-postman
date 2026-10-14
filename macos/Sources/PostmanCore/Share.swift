@@ -10,7 +10,8 @@ private let credentialHeaders: Set<String> = ["authorization", "proxy-authorizat
 /// Body keys and header names that hold a secret by their name alone.
 private func looksSecret(_ name: String) -> Bool {
     let lower = name.lowercased()
-    return ["password", "passwd", "secret", "token", "apikey", "api_key"].contains { lower.contains($0) }
+    return ["password", "passwd", "secret", "token", "apikey", "api_key", "api-key", "credential"].contains { lower.contains($0) }
+        || ["key", "pwd", "pass", "sig", "signature", "auth", "code"].contains(lower)
 }
 
 public let redactedValue = "<redacted>"
@@ -27,10 +28,44 @@ public func redactedHeader(_ name: String, _ value: String) -> String {
     return redactedValue
 }
 
-/// A JSON body with every secret-looking key blanked, at any depth. Anything
-/// that is not JSON comes back unchanged: there is no telling where its secrets are.
+/// The URL's stand-in for `<redacted>`, which would need percent-encoding there.
+public let redactedURLValue = "REDACTED"
+
+/// A URL with the password in its user info and every secret-looking query
+/// parameter blanked. The rest stays exactly as typed.
+public func redactedURL(_ url: String) -> String {
+    guard var parts = URLComponents(string: url) else { return url }
+    var changed = false
+    if parts.password != nil {
+        parts.percentEncodedPassword = redactedURLValue
+        changed = true
+    }
+    if let items = parts.percentEncodedQueryItems {
+        parts.percentEncodedQueryItems = items.map { item in
+            guard looksSecret(item.name.removingPercentEncoding ?? item.name), item.value != nil else { return item }
+            changed = true
+            return URLQueryItem(name: item.name, value: redactedURLValue)
+        }
+    }
+    return changed ? (parts.string ?? url) : url
+}
+
+/// `a=1&password=x`, the shape of a form post, with its secret fields blanked.
+/// Nil when the body is not that shape.
+private func redactedForm(_ body: String) -> String? {
+    let fields = body.split(separator: "&", omittingEmptySubsequences: false)
+    guard !body.isEmpty, !body.contains(where: \.isWhitespace), fields.allSatisfy({ $0.contains("=") }) else { return nil }
+    return fields.map { field in
+        let name = field.split(separator: "=", maxSplits: 1)[0]
+        let decoded = String(name).replacingOccurrences(of: "+", with: " ").removingPercentEncoding ?? String(name)
+        return looksSecret(decoded) ? "\(name)=\(redactedValue)" : String(field)
+    }.joined(separator: "&")
+}
+
+/// A JSON or form body with every secret-looking field blanked, at any depth.
+/// Any other body comes back unchanged: there is no telling where its secrets are.
 public func redactedBody(_ body: String) -> String {
-    guard let value = JSONValue.parse(body) else { return body }
+    guard let value = JSONValue.parse(body) else { return redactedForm(body) ?? body }
     func scrub(_ value: JSONValue) -> JSONValue {
         switch value {
         case .object(let fields):
@@ -83,7 +118,7 @@ public func curlCommand(_ request: ResolvedRequest, hideCredentials: Bool = true
         method = request.method.rawValue
     }
 
-    var lines = ["curl -X \(method) \(shellQuoted(request.url))"]
+    var lines = ["curl -X \(method) \(shellQuoted(hideCredentials ? redactedURL(request.url) : request.url))"]
     for key in headers.keys.sorted(by: { $0.lowercased() < $1.lowercased() }) {
         let value = hideCredentials ? redactedHeader(key, headers[key]!) : headers[key]!
         lines.append("-H \(shellQuoted("\(key): \(value)"))")
@@ -103,11 +138,12 @@ public func exchangeText(_ item: HistoryItem, hideCredentials: Bool = true) -> S
     }
 
     let request = item.resolved
+    let url = hideCredentials ? redactedURL(request.url) : request.url
     var out: [String] = []
     if let mcp = request.mcp {
-        out.append("MCP \(mcp.method.rawValue) \(request.url)")
+        out.append("MCP \(mcp.method.rawValue) \(url)")
     } else {
-        out.append("\(request.method.rawValue) \(request.url)")
+        out.append("\(request.method.rawValue) \(url)")
     }
     out += headerLines(request.headers)
     let sentBody = request.mcp.map(mcpBody) ?? request.body ?? ""
