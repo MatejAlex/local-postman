@@ -48,8 +48,7 @@ struct HistoryView: View {
                             Divider()
                             Button("Copy as cURL") {
                                 NSPasteboard.general.clearContents()
-                                let hide = UserDefaults.standard.object(forKey: "share.hideCredentials") as? Bool ?? true
-                                NSPasteboard.general.setString(curlCommand(item.resolved, hideCredentials: hide), forType: .string)
+                                NSPasteboard.general.setString(curlCommand(item.resolved), forType: .string)
                             }
                             Button("Copy URL") {
                                 NSPasteboard.general.clearContents()
@@ -140,8 +139,6 @@ struct HistoryDetailView: View {
     @State private var entry: ResponseEntry
     @State private var pane = 0
     @State private var copied = false
-    /// On by default: what is copied here usually ends up in a chat.
-    @AppStorage("share.hideCredentials") private var hideCredentials = true
 
     init(item: HistoryItem) {
         _item = State(initialValue: item)
@@ -167,22 +164,16 @@ struct HistoryDetailView: View {
                 }
                 Spacer()
                 Menu {
-                    Button("Copy Request and Response") {
-                        copy(exchangeText(item, hideCredentials: hideCredentials))
-                    }
-                    Divider()
-                    Toggle("Hide Credentials", isOn: $hideCredentials)
+                    Button("Copy Request and Response") { copy(exchangeText(item)) }
                 } label: {
                     Label(copied ? "Copied" : "Copy as cURL", systemImage: copied ? "checkmark" : "terminal")
                 } primaryAction: {
-                    copy(curlCommand(item.resolved, hideCredentials: hideCredentials))
+                    copy(curlCommand(item.resolved))
                 }
                 .menuStyle(.button)
                 .buttonStyle(.glass)
                 .fixedSize()
-                .help(hideCredentials
-                      ? "Copy as cURL, with tokens, passwords and cookies replaced by <redacted>"
-                      : "Copy as cURL, credentials included")
+                .help("Copy as cURL, exactly as sent")
                 Button {
                     // Swap the result in here rather than re-presenting the sheet.
                     model.replay(item) { replayed in

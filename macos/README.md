@@ -35,7 +35,7 @@ cd macos && swift test
 |---|---|
 | `Sources/PostmanCore/` | Everything that is not a view: models, `{{variable}}` substitution, request resolution, the HTTP sender, the MCP client, storage with the `secrets.json` split, and the JSON/HTML/XML formatters. No UI imports. |
 | `Sources/LocalPostman/` | The SwiftUI app. `AppModel` holds all state and does all saving; the views only read it and call into it. |
-| `Tests/PostmanCoreTests/` | 61 tests covering the behaviour carried over from the web app. |
+| `Tests/PostmanCoreTests/` | 54 tests covering the behaviour carried over from the web app. |
 | `scripts/build-app.sh` | Builds and installs the `.app`. |
 | `scripts/make-icon.swift` | Draws the app icon into `Resources/AppIcon.icns`; run it with `swift` after changing the design. |
 
@@ -52,7 +52,7 @@ A certificate that fails only Apple's 825-day validity rule is accepted, since i
 - **Each request keeps its last response** for the session, so switching requests no longer throws it away, and the app reopens on the request you left.
 - **A request in flight can be cancelled** (⌘. or the Cancel button).
 - **Double-click a collection to collapse it.** Rename it, or a request, from the right-click menu; a request can also be renamed by double-clicking it.
-- **A history entry can be copied** as a cURL command or as the whole request and response, for pasting to a colleague. Tokens, passwords and cookies in headers, JSON or form bodies and URL query parameters are replaced with `<redacted>` unless Hide Credentials is turned off in the Copy menu.
+- **A history entry can be copied** as a cURL command or as the whole request and response, for pasting to a colleague. Both are exactly what was sent, credentials included.
 - **Large bodies stay fast.** Bodies are shown in a native text view with JSON/HTML syntax colours and ⌘F find. Formatting runs off the main thread and keeps keys in the server's order.
 - **Appearance follows macOS** (or is forced to Light or Dark under View ▸ Appearance). The web app's three themes are gone.
 - **The URL bar shows what will actually be sent** under it, and warns about any `{{variable}}` that isn't defined.
