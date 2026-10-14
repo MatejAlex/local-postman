@@ -35,7 +35,7 @@ cd macos && swift test
 |---|---|
 | `Sources/PostmanCore/` | Everything that is not a view: models, `{{variable}}` substitution, request resolution, the HTTP sender, the MCP client, storage with the `secrets.json` split, and the JSON/HTML/XML formatters. No UI imports. |
 | `Sources/LocalPostman/` | The SwiftUI app. `AppModel` holds all state and does all saving; the views only read it and call into it. |
-| `Tests/PostmanCoreTests/` | 51 tests covering the behaviour carried over from the web app. |
+| `Tests/PostmanCoreTests/` | 56 tests covering the behaviour carried over from the web app. |
 | `scripts/build-app.sh` | Builds and installs the `.app`. |
 | `scripts/make-icon.swift` | Draws the app icon into `Resources/AppIcon.icns`; run it with `swift` after changing the design. |
 
@@ -46,10 +46,13 @@ These are the differences:
 
 - **No proxy.** A native app has no CORS problem, so requests go straight out through `URLSession`. The proxy's other jobs are still done: a 30 s timeout, redirects followed by hand with credentials dropped when the origin changes, and errors returned as a response instead of a crash.
 - **System certificates just work.** `URLSession` trusts the macOS keychain, so hosts behind a private CA no longer need `--use-system-ca`.
+A certificate that fails only Apple's 825-day validity rule is accepted, since internal CAs routinely issue longer ones; an untrusted CA or a wrong hostname still fails.
 - **No background service.** No Node, no nvm, no LaunchAgent and no `postman build`. It's an app.
 - **The response pane can be resized and maximised.** Drag the divider (double-click it to reset); ⇧⌘↩ gives the response the whole pane; ⌘\\ switches between stacked and side-by-side.
 - **Each request keeps its last response** for the session, so switching requests no longer throws it away, and the app reopens on the request you left.
 - **A request in flight can be cancelled** (⌘. or the Cancel button).
+- **Double-click a collection to collapse it.** Rename it, or a request, from the right-click menu; a request can also be renamed by double-clicking it.
+- **A history entry can be copied** as a cURL command or as the whole request and response, for pasting to a colleague. Tokens, passwords and cookies are replaced with `<redacted>` unless Hide Credentials is turned off in the Copy menu.
 - **Large bodies stay fast.** Bodies are shown in a native text view with JSON/HTML syntax colours and ⌘F find. Formatting runs off the main thread and keeps keys in the server's order.
 - **Appearance follows macOS** (or is forced to Light or Dark under View ▸ Appearance). The web app's three themes are gone.
 - **The URL bar shows what will actually be sent** under it, and warns about any `{{variable}}` that isn't defined.

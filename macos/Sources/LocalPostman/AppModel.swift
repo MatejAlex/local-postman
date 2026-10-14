@@ -45,6 +45,8 @@ final class AppModel {
     var focusURLTick = 0
     /// The sidebar row being renamed in place, set by double-click or Rename.
     var renamingRequest: String?
+    /// The collection header being renamed in place, set from its menu.
+    var renamingCollection: String?
 
     @ObservationIgnored let storage: Storage
     @ObservationIgnored private let sender = Sender()

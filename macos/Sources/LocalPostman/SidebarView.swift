@@ -114,6 +114,7 @@ struct SidebarView: View {
         Button("New Request") { model.addRequest(to: group.id, kind: .http) }
         Button("New MCP Request") { model.addRequest(to: group.id, kind: .mcp) }
         Divider()
+        Button("Rename") { model.renamingCollection = group.id }
         Button("Settings…") { model.editingCollection = GroupRef(id: group.id) }
         Divider()
         Button("Move Up") { model.moveGroup(group.id, by: -1) }
@@ -185,8 +186,8 @@ struct EmptyCollectionRow: View {
     }
 }
 
-/// A collection's header: colour, name (double-click to rename), and on hover
-/// the settings, add and add-MCP buttons.
+/// A collection's header: colour, name, and on hover the add, add-MCP and
+/// settings buttons. Double-click collapses it; Rename is in its menu.
 struct CollectionRow: View {
     @Environment(AppModel.self) private var model
     let group: RequestGroup
@@ -214,7 +215,6 @@ struct CollectionRow: View {
                 Text(group.name)
                     .fontWeight(.semibold)
                     .lineLimit(1)
-                    .onTapGesture(count: 2) { startRename() }
             }
 
             Spacer(minLength: 4)
@@ -256,7 +256,16 @@ struct CollectionRow: View {
         }
         .buttonStyle(.borderless)
         .contentShape(Rectangle())
+        .onTapGesture(count: 2) {
+            if !renaming { withAnimation(.snappy) { isExpanded.toggle() } }
+        }
         .onHover { hovering = $0 }
+        .onChange(of: model.renamingCollection) { _, id in
+            if id == group.id {
+                model.renamingCollection = nil
+                startRename()
+            }
+        }
     }
 
     private var settingsHint: String {

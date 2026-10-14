@@ -88,6 +88,8 @@ struct CollectionSettingsView: View {
             }
             .padding(16)
         }
-        .frame(width: 620, height: 680)
+        .frame(minWidth: 560, idealWidth: 620, maxWidth: .infinity, minHeight: 480, idealHeight: 680, maxHeight: .infinity)
+        // A sheet is fixed-size unless asked; a long variables list wants room.
+        .resizableSheet()
     }
 }

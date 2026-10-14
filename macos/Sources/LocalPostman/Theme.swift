@@ -89,3 +89,21 @@ struct SectionLabel: View {
 
 let monoFont = Font.system(.body, design: .monospaced)
 let smallMonoFont = Font.system(.callout, design: .monospaced)
+
+/// Lets the user drag a sheet larger. SwiftUI presents sheets fixed-size on
+/// macOS whatever their frame says, so this sets the window's own flag.
+struct ResizableSheet: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { Probe() }
+    func updateNSView(_ view: NSView, context: Context) {}
+
+    private final class Probe: NSView {
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            window?.styleMask.insert(.resizable)
+        }
+    }
+}
+
+extension View {
+    func resizableSheet() -> some View { background(ResizableSheet()) }
+}

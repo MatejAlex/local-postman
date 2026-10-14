@@ -46,6 +46,11 @@ struct HistoryView: View {
                             Button("View Request and Response") { model.inspectedHistory = item }
                             Button("Send Again") { model.replay(item) }
                             Divider()
+                            Button("Copy as cURL") {
+                                NSPasteboard.general.clearContents()
+                                let hide = UserDefaults.standard.object(forKey: "share.hideCredentials") as? Bool ?? true
+                                NSPasteboard.general.setString(curlCommand(item.resolved, hideCredentials: hide), forType: .string)
+                            }
                             Button("Copy URL") {
                                 NSPasteboard.general.clearContents()
                                 NSPasteboard.general.setString(item.url, forType: .string)
@@ -134,6 +139,9 @@ struct HistoryDetailView: View {
     @State private var item: HistoryItem
     @State private var entry: ResponseEntry
     @State private var pane = 0
+    @State private var copied = false
+    /// On by default: what is copied here usually ends up in a chat.
+    @AppStorage("share.hideCredentials") private var hideCredentials = true
 
     init(item: HistoryItem) {
         _item = State(initialValue: item)
@@ -158,6 +166,23 @@ struct HistoryDetailView: View {
                         .lineLimit(2)
                 }
                 Spacer()
+                Menu {
+                    Button("Copy Request and Response") {
+                        copy(exchangeText(item, hideCredentials: hideCredentials))
+                    }
+                    Divider()
+                    Toggle("Hide Credentials", isOn: $hideCredentials)
+                } label: {
+                    Label(copied ? "Copied" : "Copy as cURL", systemImage: copied ? "checkmark" : "terminal")
+                } primaryAction: {
+                    copy(curlCommand(item.resolved, hideCredentials: hideCredentials))
+                }
+                .menuStyle(.button)
+                .buttonStyle(.glass)
+                .fixedSize()
+                .help(hideCredentials
+                      ? "Copy as cURL, with tokens, passwords and cookies replaced by <redacted>"
+                      : "Copy as cURL, credentials included")
                 Button {
                     // Swap the result in here rather than re-presenting the sheet.
                     model.replay(item) { replayed in
@@ -194,7 +219,18 @@ struct HistoryDetailView: View {
                 SentRequestView(item: item)
             }
         }
-        .frame(minWidth: 820, idealWidth: 1000, minHeight: 560, idealHeight: 720)
+        .frame(minWidth: 820, idealWidth: 1000, maxWidth: .infinity, minHeight: 560, idealHeight: 720, maxHeight: .infinity)
+        .resizableSheet()
+    }
+
+    private func copy(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        copied = true
+        Task {
+            try? await Task.sleep(for: .seconds(1.2))
+            copied = false
+        }
     }
 }
 
