@@ -35,11 +35,12 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>LSApplicationCategoryType</key><string>public.app-category.developer-tools</string>
     <key>NSHighResolutionCapable</key><true/>
     <key>NSPrincipalClass</key><string>NSApplication</string>
-    <!-- An API client has to reach plain-http dev servers and anything on the LAN. -->
+    <!-- An API client has to reach plain-http dev servers and anything on the LAN.
+         No NSAllowsLocalNetworking: when it is present macOS ignores
+         NSAllowsArbitraryLoads, and ATS then rejects internal CA certificates. -->
     <key>NSAppTransportSecurity</key>
     <dict>
         <key>NSAllowsArbitraryLoads</key><true/>
-        <key>NSAllowsLocalNetworking</key><true/>
     </dict>
     <key>NSLocalNetworkUsageDescription</key>
     <string>Local Postman sends the requests you build to servers on your network.</string>
