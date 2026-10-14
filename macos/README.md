@@ -35,7 +35,7 @@ cd macos && swift test
 |---|---|
 | `Sources/PostmanCore/` | Everything that is not a view: models, `{{variable}}` substitution, request resolution, the HTTP sender, the MCP client, storage with the `secrets.json` split, and the JSON/HTML/XML formatters. No UI imports. |
 | `Sources/LocalPostman/` | The SwiftUI app. `AppModel` holds all state and does all saving; the views only read it and call into it. |
-| `Tests/PostmanCoreTests/` | 54 tests covering the behaviour carried over from the web app. |
+| `Tests/PostmanCoreTests/` | 56 tests covering the behaviour carried over from the web app. |
 | `scripts/build-app.sh` | Builds and installs the `.app`. |
 | `scripts/make-icon.swift` | Draws the app icon into `Resources/AppIcon.icns`; run it with `swift` after changing the design. |
 

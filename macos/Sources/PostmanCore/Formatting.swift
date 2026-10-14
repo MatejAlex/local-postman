@@ -58,6 +58,37 @@ public func prettyBody(_ body: String, contentType: String) -> String {
 
 // MARK: - JSON
 
+/// JSON with every `\n` escape inside a string turned into a real line break,
+/// so a multi-line value (source code from an MCP tool, a stack trace) reads as
+/// lines. For display only: the result is no longer valid JSON. `\\n`, an
+/// escaped backslash followed by an n, is left alone.
+public func breakingEscapedNewlines(_ json: String) -> String {
+    let scalars = Array(json.unicodeScalars)
+    var out = String.UnicodeScalarView()
+    out.reserveCapacity(scalars.count)
+    var i = 0
+    while i < scalars.count {
+        let c = scalars[i]
+        guard c == "\\", i + 1 < scalars.count else {
+            out.append(c)
+            i += 1
+            continue
+        }
+        let next = scalars[i + 1]
+        if next == "n" {
+            out.append("\n")
+        } else if next == "r", i + 3 < scalars.count, scalars[i + 2] == "\\", scalars[i + 3] == "n" {
+            out.append("\n")
+            i += 2
+        } else {
+            out.append(c)
+            out.append(next)
+        }
+        i += 2
+    }
+    return String(out)
+}
+
 /// Re-indent JSON with two spaces, keeping keys in the order the server sent
 /// them (a dictionary round-trip would shuffle them). Text that is not valid
 /// JSON comes back unchanged.
